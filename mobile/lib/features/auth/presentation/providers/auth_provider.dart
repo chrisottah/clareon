@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../data/repositories/auth_repository.dart';
+import '../../data/repositories/auth_repository.dart';
+import 'package:dio/dio.dart';
 
 // Repository provider
 final authRepositoryProvider = Provider<AuthRepository>((_) => AuthRepository());
@@ -120,6 +121,14 @@ class AuthNotifier extends StateNotifier<AuthState> {
       );
       return false;
     }
+  }
+
+  /// Extracts a user-friendly message from exceptions.
+  String parseError(Object e) {
+    if (e is DioException) {
+      return e.response?.data?['detail'] ?? 'Network error';
+    }
+    return e.toString();
   }
 
   void reset() => state = const AuthState();

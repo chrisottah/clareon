@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../data/models/recording_session.dart';
-import '../data/repositories/recording_repository.dart';
+import '../../data/models/recording_session.dart';
+import '../../data/repositories/recording_repository.dart';
 
 enum RecordingStatus {
   idle,

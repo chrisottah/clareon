@@ -1,7 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import '../../../core/network/api_client.dart';
-import '../../../core/config/app_config.dart';
+import 'package:clareon/core/network/api_client.dart';
+import 'package:clareon/core/config/app_config.dart';
 
 class AuthRepository {
   final _storage = const FlutterSecureStorage();
