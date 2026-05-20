@@ -1,0 +1,32 @@
+# Environment
+.env
+*.env.local
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+dist/
+*.egg-info/
+
+# Flutter
+mobile/.dart_tool/
+mobile/.flutter-plugins
+mobile/.flutter-plugins-dependencies
+mobile/build/
+mobile/.packages
+mobile/pubspec.lock
+
+# Docker volumes
+postgres_data/
+redis_data/
+
+# Media uploads
+backend/media/
+
+# IDE
+.vscode/
+.idea/
+*.swp
