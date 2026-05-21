@@ -3,22 +3,26 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from fastapi import HTTPException, status
-from passlib.context import CryptContext
+from argon2 import PasswordHasher
+from argon2.exceptions import VerifyMismatchError
 
 from app.models.user import User
 from app.schemas.auth import SignupRequest, LoginRequest, TokenResponse
 from app.core.security import create_access_token, create_refresh_token, decode_token
 from app.services.email_service import send_verification_email, send_password_reset_email
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+_ph = PasswordHasher()
 
 
 def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
+    return _ph.hash(password)
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    return pwd_context.verify(plain, hashed)
+    try:
+        return _ph.verify(hashed, plain)
+    except VerifyMismatchError:
+        return False
 
 
 async def signup(db: AsyncSession, data: SignupRequest) -> User:

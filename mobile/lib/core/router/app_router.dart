@@ -7,6 +7,7 @@ import '../../features/auth/presentation/screens/forgot_password_screen.dart';
 import '../../features/auth/presentation/screens/reset_password_screen.dart';
 import '../../features/meetings/presentation/screens/home_screen.dart';
 import '../../features/recording/presentation/screens/recording_screen.dart';
+import '../../features/meetings/presentation/screens/meeting_detail_screen.dart';
 import '../../features/auth/data/repositories/auth_repository.dart';
 
 final _authRepo = AuthRepository();
@@ -34,6 +35,12 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/reset-password', builder: (_, __) => const ResetPasswordScreen()),
       GoRoute(path: '/home', builder: (_, __) => const HomeScreen()),
       GoRoute(path: '/record', builder: (_, __) => const RecordingScreen()),
+      GoRoute(
+        path: '/meeting/:id',
+        builder: (context, state) => MeetingDetailScreen(
+          meetingId: state.pathParameters['id']!,
+        ),
+      ),
     ],
   );
 });
@@ -50,6 +57,12 @@ class AppRouter {
       GoRoute(path: '/reset-password', builder: (_, __) => const ResetPasswordScreen()),
       GoRoute(path: '/home', builder: (_, __) => const HomeScreen()),
       GoRoute(path: '/record', builder: (_, __) => const RecordingScreen()),
+      GoRoute(
+        path: '/meeting/:id',
+        builder: (context, state) => MeetingDetailScreen(
+          meetingId: state.pathParameters['id']!,
+        ),
+      ),
     ],
   );
 }

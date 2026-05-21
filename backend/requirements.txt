@@ -18,9 +18,9 @@ pydantic==2.7.1
 pydantic-settings==2.2.1
 python-dotenv==1.0.1
 
-# Queue (ready for Phase 5)
+# Queue
 celery==5.4.0
-redis==5.0.4
+redis==5.1.1
 
 # Email
 fastapi-mail==1.4.1
@@ -28,3 +28,15 @@ fastapi-mail==1.4.1
 # Utils
 httpx==0.27.0
 aiofiles==23.2.1
+
+# Auth - password hashing
+argon2-cffi==23.1.0
+
+# NumPy - must stay on 1.x
+numpy<2.0
+
+# AI - Diarization
+pyannote.audio==3.1.1
+
+# AI - Summarization
+ollama==0.2.1
