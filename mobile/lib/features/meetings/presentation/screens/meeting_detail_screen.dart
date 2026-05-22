@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -25,15 +26,39 @@ class MeetingDetailScreen extends ConsumerStatefulWidget {
 class _MeetingDetailScreenState extends ConsumerState<MeetingDetailScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  Timer? _pollTimer;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
+    // Force fresh fetch on every screen open
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.invalidate(meetingDetailProvider(widget.meetingId));
+      ref.invalidate(transcriptProvider(widget.meetingId));
+      ref.invalidate(intelligenceProvider(widget.meetingId));
+    });
+    _startPolling();
+  }
+
+  void _startPolling() {
+    _pollTimer?.cancel();
+    _pollTimer = Timer.periodic(const Duration(seconds: 10), (_) {
+      final meeting = ref.read(meetingDetailProvider(widget.meetingId));
+      meeting.whenData((m) {
+        if (m.isCompleted || m.isFailed) {
+          _pollTimer?.cancel();
+          ref.invalidate(transcriptProvider(widget.meetingId));
+          ref.invalidate(intelligenceProvider(widget.meetingId));
+        }
+        ref.invalidate(meetingDetailProvider(widget.meetingId));
+      });
+    });
   }
 
   @override
   void dispose() {
+    _pollTimer?.cancel();
     _tabController.dispose();
     super.dispose();
   }
@@ -144,6 +169,44 @@ class _MeetingDetailScreenState extends ConsumerState<MeetingDetailScreen>
     }
   }
 
+  void _handleExport(String type, Meeting meeting) {
+    final meetingId = widget.meetingId;
+    final transcriptAsync = ref.read(transcriptProvider(meetingId));
+    final intelAsync = ref.read(intelligenceProvider(meetingId));
+
+    String fullText = 'MEETING: ${meeting.title}\n';
+    fullText += 'Date: ${meeting.createdAt}\n';
+    fullText += 'Duration: ${meeting.formattedDuration}\n\n';
+
+    transcriptAsync.whenData((transcript) {
+      fullText += '─── TRANSCRIPT ───\n\n';
+      fullText += transcript.segments.map((seg) {
+        final speaker = seg.speaker != null ? '${seg.speaker}: ' : '';
+        return '[${_secondsToTime(seg.startTime)}] $speaker${seg.text}';
+      }).join('\n');
+
+      intelAsync.whenData((intel) {
+        fullText += '\n\n─── MEETING MINUTES ───\n\n${intel.summary ?? ''}';
+        fullText += '\n\n─── KEY INSIGHTS ───\n\n';
+        fullText += intel.keyInsights.map((i) => '• $i').join('\n');
+        fullText += '\n\n─── ACTION POINTS ───\n\n';
+        fullText += intel.actionPoints.map((a) => '☐ $a').join('\n');
+
+        switch (type) {
+          case 'pdf':
+            ExportService.exportAsPdf(fullText, title: meeting.title);
+            break;
+          case 'txt':
+            ExportService.exportAsTxt(fullText, title: meeting.title);
+            break;
+          case 'email':
+            ExportService.shareViaEmail(fullText, title: meeting.title);
+            break;
+        }
+      });
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final meetingAsync = ref.watch(meetingDetailProvider(widget.meetingId));
@@ -168,14 +231,24 @@ class _MeetingDetailScreenState extends ConsumerState<MeetingDetailScreen>
             ),
           ),
           actions: [
-            // Export button — only when completed
+            // Manual refresh button
+            IconButton(
+              icon: const Icon(Icons.refresh),
+              tooltip: 'Refresh',
+              onPressed: () {
+                ref.invalidate(meetingDetailProvider(widget.meetingId));
+                ref.invalidate(transcriptProvider(widget.meetingId));
+                ref.invalidate(intelligenceProvider(widget.meetingId));
+              },
+            ),
+            // Share button — only when completed
             if (meeting.isCompleted)
               IconButton(
                 icon: const Icon(Icons.share),
                 tooltip: 'Share',
                 onPressed: () => _exportCurrentTab(meeting),
               ),
-            // Export as PDF/TXT
+            // Export dropdown — only when completed
             if (meeting.isCompleted)
               PopupMenuButton<String>(
                 icon: const Icon(Icons.download),
@@ -208,7 +281,7 @@ class _MeetingDetailScreenState extends ConsumerState<MeetingDetailScreen>
                   ),
                 ],
               ),
-            // Delete button
+            // Delete button — always visible
             IconButton(
               icon: const Icon(Icons.delete_outline, color: Color(0xFFEF4444)),
               tooltip: 'Delete',
@@ -224,8 +297,6 @@ class _MeetingDetailScreenState extends ConsumerState<MeetingDetailScreen>
             ],
           ),
         ),
-
-        // Processing banner
         body: Column(
           children: [
             if (meeting.isProcessing)
@@ -237,7 +308,8 @@ class _MeetingDetailScreenState extends ConsumerState<MeetingDetailScreen>
                 child: const Row(
                   children: [
                     SizedBox(
-                      width: 16, height: 16,
+                      width: 16,
+                      height: 16,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     ),
                     SizedBox(width: 12),
@@ -282,44 +354,6 @@ class _MeetingDetailScreenState extends ConsumerState<MeetingDetailScreen>
         body: Center(child: Text('Error: $err')),
       ),
     );
-  }
-
-  void _handleExport(String type, Meeting meeting) {
-    final meetingId = widget.meetingId;
-    final transcriptAsync = ref.read(transcriptProvider(meetingId));
-    final intelAsync = ref.read(intelligenceProvider(meetingId));
-
-    String fullText = 'MEETING: ${meeting.title}\n';
-    fullText += 'Date: ${meeting.createdAt}\n';
-    fullText += 'Duration: ${meeting.formattedDuration}\n\n';
-
-    transcriptAsync.whenData((transcript) {
-      fullText += '─── TRANSCRIPT ───\n\n';
-      fullText += transcript.segments.map((seg) {
-        final speaker = seg.speaker != null ? '${seg.speaker}: ' : '';
-        return '[${_secondsToTime(seg.startTime)}] $speaker${seg.text}';
-      }).join('\n');
-
-      intelAsync.whenData((intel) {
-        fullText += '\n\n─── MEETING MINUTES ───\n\n${intel.summary ?? ''}';
-        fullText += '\n\n─── KEY INSIGHTS ───\n\n';
-        fullText += intel.keyInsights.map((i) => '• $i').join('\n');
-        fullText += '\n\n─── ACTION POINTS ───\n\n';
-        fullText += intel.actionPoints.map((a) => '☐ $a').join('\n');
-
-        switch (type) {
-          case 'pdf':
-            ExportService.exportAsPdf(fullText, title: meeting.title);
-            break;
-          case 'txt':
-            ExportService.exportAsTxt(fullText, title: meeting.title);
-            break;
-          case 'email':
-            ExportService.shareViaEmail(fullText, title: meeting.title);
-            break;
-        }
-      });
-    });
   }
 }
 

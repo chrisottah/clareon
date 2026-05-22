@@ -9,8 +9,6 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
     REFRESH_TOKEN_EXPIRE_DAYS: int = 30
     HUGGINGFACE_TOKEN: str = ""
-    OLLAMA_URL: str = "http://ollama:11434"
-    OLLAMA_MODEL: str = "mistral"
 
     # Database
     DATABASE_URL: str = "postgresql+asyncpg://clareon:clareon_secret@db:5432/clareon_db"
@@ -32,6 +30,9 @@ class Settings(BaseSettings):
     # Whisper
     WHISPER_MODEL: str = "base"
     WHISPER_DEVICE: str = "cpu"
+
+    # Groq
+    GROQ_API_KEY: str = ""
 
     class Config:
         env_file = ".env"

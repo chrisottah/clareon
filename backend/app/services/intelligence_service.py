@@ -1,13 +1,13 @@
 import json
 import logging
-import httpx
+import concurrent.futures
+from groq import Groq
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
 
 def _build_transcript_text(segments) -> str:
-    """Convert segments into readable transcript for the AI prompt."""
     lines = []
     current_speaker = None
     for seg in segments:
@@ -19,27 +19,18 @@ def _build_transcript_text(segments) -> str:
     return "\n".join(lines)
 
 
-def _call_ollama(prompt: str) -> str:
-    """Call local Ollama API synchronously."""
-    try:
-        with httpx.Client(timeout=120.0) as client:
-            response = client.post(
-                f"{settings.OLLAMA_URL}/api/generate",
-                json={
-                    "model": settings.OLLAMA_MODEL,
-                    "prompt": prompt,
-                    "stream": False,
-                },
-            )
-            response.raise_for_status()
-            return response.json()["response"].strip()
-    except Exception as e:
-        logger.error(f"Ollama call failed: {e}")
-        raise
+def _call_groq(prompt: str, max_tokens: int = 1024) -> str:
+    client = Groq(api_key=settings.GROQ_API_KEY)
+    response = client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=max_tokens,
+        temperature=0.3,
+    )
+    return response.choices[0].message.content.strip()
 
 
 def generate_summary(transcript_text: str) -> str:
-    """Generate intelligent meeting minutes."""
     prompt = f"""You are an expert meeting analyst. Based on the transcript below, write clear and concise meeting minutes.
 
 Include:
@@ -54,12 +45,10 @@ TRANSCRIPT:
 {transcript_text}
 
 MEETING MINUTES:"""
-
-    return _call_ollama(prompt)
+    return _call_groq(prompt, max_tokens=1024)
 
 
 def generate_action_points(transcript_text: str) -> list[str]:
-    """Extract action items and tasks from the meeting."""
     prompt = f"""You are an expert at extracting action items from meetings.
 
 From the transcript below, extract all action points, tasks, and next steps.
@@ -67,63 +56,66 @@ Return ONLY a JSON array of strings. Each string is one action point.
 Be specific about who should do what when possible.
 If no action points exist, return an empty array.
 
-Example format: ["John to send the report by Friday", "Team to review the proposal", "Schedule follow-up meeting next week"]
+Example format: ["John to send the report by Friday", "Team to review the proposal"]
 
 TRANSCRIPT:
 {transcript_text}
 
 ACTION POINTS (JSON array only, no other text):"""
 
-    raw = _call_ollama(prompt)
+    raw = _call_groq(prompt, max_tokens=512)
     try:
-        # Clean up common JSON issues
         raw = raw.strip()
         if not raw.startswith("["):
-            raw = raw[raw.find("["):]
+            start = raw.find("[")
+            if start == -1:
+                return []
+            raw = raw[start:]
         if not raw.endswith("]"):
-            raw = raw[:raw.rfind("]") + 1]
+            end = raw.rfind("]")
+            if end == -1:
+                return []
+            raw = raw[:end + 1]
         return json.loads(raw)
     except Exception:
-        logger.warning("Could not parse action points JSON, extracting manually")
-        # Fallback: split by newlines and clean up
         lines = [l.strip("•-– ").strip() for l in raw.split("\n") if l.strip()]
         return [l for l in lines if len(l) > 10]
 
 
 def generate_key_insights(transcript_text: str) -> list[str]:
-    """Extract key discussion points and insights."""
     prompt = f"""You are an expert meeting analyst.
 
 From the transcript below, extract 3-6 key insights or important discussion points.
 Return ONLY a JSON array of strings. Each string is one insight.
-Focus on: important decisions, notable disagreements, significant ideas, and critical information shared.
+Focus on: important decisions, notable disagreements, significant ideas, critical information.
 
-Example format: ["The team agreed to delay the launch by 2 weeks", "Budget concerns were raised regarding the marketing plan"]
+Example format: ["The team agreed to delay the launch by 2 weeks", "Budget concerns were raised"]
 
 TRANSCRIPT:
 {transcript_text}
 
 KEY INSIGHTS (JSON array only, no other text):"""
 
-    raw = _call_ollama(prompt)
+    raw = _call_groq(prompt, max_tokens=512)
     try:
         raw = raw.strip()
         if not raw.startswith("["):
-            raw = raw[raw.find("["):]
+            start = raw.find("[")
+            if start == -1:
+                return []
+            raw = raw[start:]
         if not raw.endswith("]"):
-            raw = raw[:raw.rfind("]") + 1]
+            end = raw.rfind("]")
+            if end == -1:
+                return []
+            raw = raw[:end + 1]
         return json.loads(raw)
     except Exception:
-        logger.warning("Could not parse insights JSON, extracting manually")
         lines = [l.strip("•-– ").strip() for l in raw.split("\n") if l.strip()]
         return [l for l in lines if len(l) > 10]
 
 
 def generate_meeting_intelligence(segments) -> dict:
-    """
-    Run all AI analysis on transcript segments.
-    Returns dict with summary, action_points, key_insights.
-    """
     if not segments:
         return {
             "summary": "No transcript available.",
@@ -132,16 +124,19 @@ def generate_meeting_intelligence(segments) -> dict:
         }
 
     transcript_text = _build_transcript_text(segments)
+    logger.info("Generating intelligence in parallel via Groq...")
 
-    logger.info("Generating meeting summary...")
-    summary = generate_summary(transcript_text)
+    # Run all three in parallel — cuts total time by ~3x
+    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+        future_summary = executor.submit(generate_summary, transcript_text)
+        future_actions = executor.submit(generate_action_points, transcript_text)
+        future_insights = executor.submit(generate_key_insights, transcript_text)
 
-    logger.info("Extracting action points...")
-    action_points = generate_action_points(transcript_text)
+        summary = future_summary.result()
+        action_points = future_actions.result()
+        key_insights = future_insights.result()
 
-    logger.info("Extracting key insights...")
-    key_insights = generate_key_insights(transcript_text)
-
+    logger.info("Intelligence generation complete")
     return {
         "summary": summary,
         "action_points": action_points,

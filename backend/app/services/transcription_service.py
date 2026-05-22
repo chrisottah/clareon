@@ -1,6 +1,8 @@
 import os
 import logging
 from dataclasses import dataclass
+from groq import Groq
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -30,20 +32,24 @@ def transcribe_audio(audio_path: str) -> list[TranscriptSegment]:
     if not os.path.exists(audio_path):
         raise FileNotFoundError(f"Audio file not found: {audio_path}")
 
-    import whisperx
+    if not settings.GROQ_API_KEY:
+        raise ValueError("GROQ_API_KEY not set in environment")
 
-    model_size = os.getenv("WHISPER_MODEL", "base")
-    device = os.getenv("WHISPER_DEVICE", "cpu")
-    compute_type = "int8"
+    client = Groq(api_key=settings.GROQ_API_KEY)
 
-    logger.info(f"Loading WhisperX model: {model_size} on {device}")
-    model = whisperx.load_model(model_size, device, compute_type=compute_type)
+    logger.info(f"Transcribing via Groq: {audio_path}")
 
-    logger.info(f"Transcribing: {audio_path}")
-    result = model.transcribe(audio_path, batch_size=8)
+    with open(audio_path, "rb") as audio_file:
+        response = client.audio.transcriptions.create(
+            file=(os.path.basename(audio_path), audio_file),
+            model="whisper-large-v3",
+            response_format="verbose_json",
+            timestamp_granularities=["segment"],
+        )
 
-    raw_segments = result.get("segments", [])
-    logger.info(f"Raw segments: {len(raw_segments)}")
+    # Groq returns segments as dicts
+    raw_segments = response.segments or []
+    logger.info(f"Groq returned {len(raw_segments)} segments")
 
     output: list[TranscriptSegment] = []
     segment_index = 0
@@ -52,18 +58,28 @@ def transcribe_audio(audio_path: str) -> list[TranscriptSegment]:
     filler_end = None
 
     for seg in raw_segments:
-        text = seg["text"].strip()
+        # Handle both dict and object responses
+        if isinstance(seg, dict):
+            text = seg.get("text", "").strip()
+            start = float(seg.get("start", 0))
+            end = float(seg.get("end", 0))
+            confidence = float(seg.get("avg_logprob", -0.5))
+        else:
+            text = seg.text.strip()
+            start = float(seg.start)
+            end = float(seg.end)
+            confidence = float(getattr(seg, "avg_logprob", -0.5))
+
         if not text:
             continue
 
-        confidence = float(seg.get("avg_logprob", -0.5))
         confidence = max(0.0, min(1.0, confidence + 1.0))
 
         if _is_filler(text):
             consecutive_fillers += 1
             if filler_start is None:
-                filler_start = seg["start"]
-            filler_end = seg["end"]
+                filler_start = start
+            filler_end = end
 
             if consecutive_fillers >= FILLER_COLLAPSE_THRESHOLD:
                 output.append(TranscriptSegment(
@@ -84,8 +100,8 @@ def transcribe_audio(audio_path: str) -> list[TranscriptSegment]:
             filler_end = None
 
             output.append(TranscriptSegment(
-                start_time=seg["start"],
-                end_time=seg["end"],
+                start_time=start,
+                end_time=end,
                 text=text,
                 speaker=None,
                 confidence=confidence,

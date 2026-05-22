@@ -32,11 +32,11 @@ aiofiles==23.2.1
 # Auth - password hashing
 argon2-cffi==23.1.0
 
-# NumPy - must stay on 1.x
-numpy<2.0
+# AI - Transcription and Intelligence
+groq==0.9.0
 
 # AI - Diarization
 pyannote.audio==3.1.1
-
-# AI - Summarization
-ollama==0.2.1
+torch==2.4.0
+torchaudio==2.4.0
+numpy<2.0
