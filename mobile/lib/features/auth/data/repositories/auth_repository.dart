@@ -27,18 +27,15 @@ class AuthRepository {
       'email': email,
       'password': password,
     });
-    await _storage.write(
-      key: AppConfig.accessTokenKey,
-      value: response.data['access_token'],
-    );
-    await _storage.write(
-      key: AppConfig.refreshTokenKey,
-      value: response.data['refresh_token'],
-    );
+    await _saveTokens(response.data);
   }
 
-  Future<void> verifyEmail(String token) async {
-    await _dio.post('/auth/verify-email', data: {'token': token});
+  Future<void> verifyEmail({required String email, required String otp}) async {
+    await _dio.post('/auth/verify-email', data: {'email': email, 'otp': otp});
+  }
+
+  Future<void> resendOtp({required String email}) async {
+    await _dio.post('/auth/resend-otp', data: {'email': email});
   }
 
   Future<void> forgotPassword(String email) async {
@@ -46,13 +43,31 @@ class AuthRepository {
   }
 
   Future<void> resetPassword({
-    required String token,
+    required String email,
+    required String otp,
     required String newPassword,
   }) async {
     await _dio.post('/auth/reset-password', data: {
-      'token': token,
+      'email': email,
+      'otp': otp,
       'new_password': newPassword,
     });
+  }
+
+  Future<void> loginWithKingsChat({
+    required String accessToken,
+    String? refreshToken,
+  }) async {
+    final response = await _dio.post('/auth/kingschat', data: {
+      'access_token': accessToken,
+      'refresh_token': refreshToken,
+    });
+    await _saveTokens(response.data);
+  }
+
+  Future<void> _saveTokens(Map<String, dynamic> data) async {
+    await _storage.write(key: AppConfig.accessTokenKey, value: data['access_token']);
+    await _storage.write(key: AppConfig.refreshTokenKey, value: data['refresh_token']);
   }
 
   Future<Map<String, dynamic>> getMe() async {
@@ -70,7 +85,6 @@ class AuthRepository {
   }
 }
 
-/// Parse Dio errors into readable messages
 String parseError(Object e) {
   if (e is DioException && e.response?.data != null) {
     final data = e.response!.data;

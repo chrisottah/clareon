@@ -9,6 +9,8 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+    
+  google_fonts: ^6.2.1
 
   # Navigation
   go_router: ^13.2.0

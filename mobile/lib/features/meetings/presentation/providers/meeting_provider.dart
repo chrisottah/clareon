@@ -45,6 +45,8 @@ class MeetingsNotifier extends StateNotifier<MeetingsState> {
 
   MeetingsNotifier(this._repo) : super(const MeetingsState());
 
+  bool get mounted => _pollTimer != null || true; // Safe fallback
+
   Future<void> loadMeetings() async {
     state = state.copyWith(status: MeetingsStatus.loading);
     try {

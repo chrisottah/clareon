@@ -11,17 +11,24 @@ class User(Base):
     id: Mapped[str] = mapped_column(
         String, primary_key=True, default=lambda: str(uuid.uuid4())
     )
-    email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
+    email: Mapped[str | None] = mapped_column(String(255), unique=True, nullable=True, index=True)
     full_name: Mapped[str] = mapped_column(String(255), nullable=False)
-    hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
+    hashed_password: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
-    # Email verification
+    # KingsChat OAuth
+    kingschat_id: Mapped[str | None] = mapped_column(String(255), unique=True, nullable=True, index=True)
+    kingschat_access_token: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    kingschat_refresh_token: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    avatar_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
+
+    # Email verification — 6-digit OTP
     is_verified: Mapped[bool] = mapped_column(Boolean, default=False)
-    verification_token: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    verification_otp: Mapped[str | None] = mapped_column(String(6), nullable=True)
+    verification_otp_expires: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    # Password reset
-    reset_token: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    reset_token_expires: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Password reset — 6-digit OTP
+    reset_otp: Mapped[str | None] = mapped_column(String(6), nullable=True)
+    reset_otp_expires: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Status
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
@@ -35,4 +42,4 @@ class User(Base):
     )
 
     def __repr__(self):
-        return f"<User {self.email}>"
+        return f"<User {self.email or self.kingschat_id}>"

@@ -32,7 +32,9 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
           _nameCtrl.text.trim(),
           _passwordCtrl.text,
         );
-    if (success && mounted) context.push('/verify-email');
+    if (success && mounted) {
+      context.push('/verify-email', extra: _emailCtrl.text.trim());
+    }
   }
 
   @override
@@ -107,8 +109,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                   child: isLoading
                       ? const SizedBox(
                           height: 20, width: 20,
-                          child: CircularProgressIndicator(
-                              strokeWidth: 2, color: Colors.white))
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                       : const Text('Create Account'),
                 ),
                 const SizedBox(height: 24),

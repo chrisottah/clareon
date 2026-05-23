@@ -4,27 +4,42 @@ import 'package:go_router/go_router.dart';
 import '../providers/auth_provider.dart';
 
 class VerifyEmailScreen extends ConsumerStatefulWidget {
-  const VerifyEmailScreen({super.key});
+  final String email;
+  const VerifyEmailScreen({super.key, required this.email});
 
   @override
   ConsumerState<VerifyEmailScreen> createState() => _VerifyEmailScreenState();
 }
 
 class _VerifyEmailScreenState extends ConsumerState<VerifyEmailScreen> {
-  final _tokenCtrl = TextEditingController();
+  final List<TextEditingController> _controllers =
+      List.generate(6, (_) => TextEditingController());
+  final List<FocusNode> _focusNodes = List.generate(6, (_) => FocusNode());
 
   @override
   void dispose() {
-    _tokenCtrl.dispose();
+    for (final c in _controllers) c.dispose();
+    for (final f in _focusNodes) f.dispose();
     super.dispose();
   }
 
+  String get _otp => _controllers.map((c) => c.text).join();
+
   Future<void> _submit() async {
-    if (_tokenCtrl.text.trim().isEmpty) return;
+    if (_otp.length < 6) return;
     final success = await ref
         .read(authProvider.notifier)
-        .verifyEmail(_tokenCtrl.text.trim());
+        .verifyEmail(widget.email, _otp);
     if (success && mounted) context.go('/login');
+  }
+
+  Future<void> _resend() async {
+    await ref.read(authProvider.notifier).resendOtp(widget.email);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('New code sent to your email')),
+      );
+    }
   }
 
   @override
@@ -55,7 +70,7 @@ class _VerifyEmailScreenState extends ConsumerState<VerifyEmailScreen> {
                   style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700)),
               const SizedBox(height: 8),
               Text(
-                "We've sent a verification token to your email address. Paste it below.",
+                'We sent a 6-digit code to ${widget.email}',
                 style: TextStyle(fontSize: 15, color: Colors.grey[500], height: 1.5),
               ),
               const SizedBox(height: 32),
@@ -73,39 +88,51 @@ class _VerifyEmailScreenState extends ConsumerState<VerifyEmailScreen> {
                 const SizedBox(height: 16),
               ],
 
-              if (state.successMessage != null) ...[
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF22C55E).withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: List.generate(6, (i) => SizedBox(
+                  width: 48, height: 56,
+                  child: TextFormField(
+                    controller: _controllers[i],
+                    focusNode: _focusNodes[i],
+                    textAlign: TextAlign.center,
+                    keyboardType: TextInputType.number,
+                    maxLength: 1,
+                    onChanged: (val) {
+                      if (val.isNotEmpty && i < 5) _focusNodes[i + 1].requestFocus();
+                      if (val.isEmpty && i > 0) _focusNodes[i - 1].requestFocus();
+                      if (_otp.length == 6) _submit();
+                    },
+                    decoration: InputDecoration(
+                      counterText: '',
+                      contentPadding: EdgeInsets.zero,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: Color(0xFF2563EB), width: 2),
+                      ),
+                    ),
+                    style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
                   ),
-                  child: Text(state.successMessage!,
-                      style: const TextStyle(color: Color(0xFF22C55E))),
-                ),
-                const SizedBox(height: 16),
-              ],
-
-              TextFormField(
-                controller: _tokenCtrl,
-                decoration: const InputDecoration(labelText: 'Verification Token'),
-                textInputAction: TextInputAction.done,
+                )),
               ),
-              const SizedBox(height: 24),
+
+              const SizedBox(height: 32),
               ElevatedButton(
-                onPressed: isLoading ? null : _submit,
+                onPressed: isLoading || _otp.length < 6 ? null : _submit,
                 child: isLoading
                     ? const SizedBox(
                         height: 20, width: 20,
-                        child: CircularProgressIndicator(
-                            strokeWidth: 2, color: Colors.white))
-                    : const Text('Verify Email'),
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    : const Text('Verify'),
               ),
               const SizedBox(height: 16),
               Center(
                 child: TextButton(
-                  onPressed: () => context.go('/login'),
-                  child: const Text('Back to Login'),
+                  onPressed: _resend,
+                  child: const Text("Didn't receive a code? Resend"),
                 ),
               ),
             ],

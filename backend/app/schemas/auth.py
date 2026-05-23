@@ -46,7 +46,8 @@ class ForgotPasswordRequest(BaseModel):
 
 
 class ResetPasswordRequest(BaseModel):
-    token: str
+    email: EmailStr
+    otp: str
     new_password: str
 
     @field_validator("new_password")
@@ -61,16 +62,24 @@ class ResetPasswordRequest(BaseModel):
         return v
 
 
-class VerifyEmailRequest(BaseModel):
-    token: str
+class VerifyOTPRequest(BaseModel):
+    email: EmailStr
+    otp: str
+
+
+class KingsChatAuthRequest(BaseModel):
+    access_token: str
+    refresh_token: str | None = None
 
 
 class UserResponse(BaseModel):
     id: str
-    email: str
+    email: str | None = None
     full_name: str
     is_verified: bool
     is_active: bool
+    avatar_url: str | None = None
+    kingschat_id: str | None = None
 
     model_config = {"from_attributes": True}
 

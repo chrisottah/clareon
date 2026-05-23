@@ -34,24 +34,30 @@ class _MeetingDetailScreenState extends ConsumerState<MeetingDetailScreen>
     _tabController = TabController(length: 3, vsync: this);
     // Force fresh fetch on every screen open
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.invalidate(meetingDetailProvider(widget.meetingId));
-      ref.invalidate(transcriptProvider(widget.meetingId));
-      ref.invalidate(intelligenceProvider(widget.meetingId));
+      _refreshAll();
     });
     _startPolling();
   }
 
+  void _refreshAll() {
+    ref.invalidate(meetingDetailProvider(widget.meetingId));
+    ref.invalidate(transcriptProvider(widget.meetingId));
+    ref.invalidate(intelligenceProvider(widget.meetingId));
+  }
+
   void _startPolling() {
     _pollTimer?.cancel();
-    _pollTimer = Timer.periodic(const Duration(seconds: 10), (_) {
+    _pollTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+      if (!mounted) return;
       final meeting = ref.read(meetingDetailProvider(widget.meetingId));
       meeting.whenData((m) {
+        debugPrint('Meeting status: ${m.status}, isCompleted: ${m.isCompleted}');
         if (m.isCompleted || m.isFailed) {
           _pollTimer?.cancel();
-          ref.invalidate(transcriptProvider(widget.meetingId));
-          ref.invalidate(intelligenceProvider(widget.meetingId));
+          _refreshAll();
+        } else {
+          ref.invalidate(meetingDetailProvider(widget.meetingId));
         }
-        ref.invalidate(meetingDetailProvider(widget.meetingId));
       });
     });
   }
@@ -212,141 +218,137 @@ class _MeetingDetailScreenState extends ConsumerState<MeetingDetailScreen>
     final meetingAsync = ref.watch(meetingDetailProvider(widget.meetingId));
 
     return meetingAsync.when(
-      data: (meeting) => Scaffold(
-        appBar: AppBar(
-          title: GestureDetector(
-            onTap: () => _editTitle(context, meeting.title),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Flexible(
-                  child: Text(
-                    meeting.title,
-                    overflow: TextOverflow.ellipsis,
+      data: (meeting) {
+        // TEMP DEBUG — remove after confirming it works
+        debugPrint('Meeting status: ${meeting.status}, isCompleted: ${meeting.isCompleted}');
+
+        return Scaffold(
+          appBar: AppBar(
+            title: GestureDetector(
+              onTap: () => _editTitle(context, meeting.title),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Flexible(
+                    child: Text(
+                      meeting.title,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
+                  const SizedBox(width: 4),
+                  const Icon(Icons.edit, size: 16, color: Colors.grey),
+                ],
+              ),
+            ),
+            actions: [
+              // Refresh button
+              IconButton(
+                icon: const Icon(Icons.refresh),
+                tooltip: 'Refresh',
+                onPressed: _refreshAll,
+              ),
+              // Share — only when completed
+              if (meeting.isCompleted)
+                IconButton(
+                  icon: const Icon(Icons.share),
+                  tooltip: 'Share',
+                  onPressed: () => _exportCurrentTab(meeting),
                 ),
-                const SizedBox(width: 4),
-                const Icon(Icons.edit, size: 16, color: Colors.grey),
+              // Export — only when completed
+              if (meeting.isCompleted)
+                PopupMenuButton<String>(
+                  icon: const Icon(Icons.download),
+                  tooltip: 'Export',
+                  onSelected: (value) => _handleExport(value, meeting),
+                  itemBuilder: (_) => const [
+                    PopupMenuItem(
+                      value: 'pdf',
+                      child: Row(children: [
+                        Icon(Icons.picture_as_pdf),
+                        SizedBox(width: 8),
+                        Text('Export as PDF'),
+                      ]),
+                    ),
+                    PopupMenuItem(
+                      value: 'txt',
+                      child: Row(children: [
+                        Icon(Icons.text_snippet),
+                        SizedBox(width: 8),
+                        Text('Export as TXT'),
+                      ]),
+                    ),
+                    PopupMenuItem(
+                      value: 'email',
+                      child: Row(children: [
+                        Icon(Icons.email),
+                        SizedBox(width: 8),
+                        Text('Send via Email'),
+                      ]),
+                    ),
+                  ],
+                ),
+              // Delete
+              IconButton(
+                icon: const Icon(Icons.delete_outline, color: Color(0xFFEF4444)),
+                tooltip: 'Delete',
+                onPressed: () => _confirmDelete(context),
+              ),
+            ],
+            bottom: TabBar(
+              controller: _tabController,
+              tabs: const [
+                Tab(icon: Icon(Icons.transcribe), text: 'Transcript'),
+                Tab(icon: Icon(Icons.summarize), text: 'Summary'),
+                Tab(icon: Icon(Icons.task), text: 'Actions'),
               ],
             ),
           ),
-          actions: [
-            // Manual refresh button
-            IconButton(
-              icon: const Icon(Icons.refresh),
-              tooltip: 'Refresh',
-              onPressed: () {
-                ref.invalidate(meetingDetailProvider(widget.meetingId));
-                ref.invalidate(transcriptProvider(widget.meetingId));
-                ref.invalidate(intelligenceProvider(widget.meetingId));
-              },
-            ),
-            // Share button — only when completed
-            if (meeting.isCompleted)
-              IconButton(
-                icon: const Icon(Icons.share),
-                tooltip: 'Share',
-                onPressed: () => _exportCurrentTab(meeting),
+          body: Column(
+            children: [
+              if (meeting.isProcessing)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  color: const Color(0xFF2563EB).withOpacity(0.1),
+                  child: const Row(
+                    children: [
+                      SizedBox(
+                        width: 16, height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                      SizedBox(width: 12),
+                      Text('Processing your meeting... Results will appear here shortly.'),
+                    ],
+                  ),
+                ),
+              if (meeting.isFailed)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  color: const Color(0xFFEF4444).withOpacity(0.1),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.error_outline, color: Color(0xFFEF4444), size: 18),
+                      SizedBox(width: 12),
+                      Text('Processing failed. Please try again.',
+                          style: TextStyle(color: Color(0xFFEF4444))),
+                    ],
+                  ),
+                ),
+              Expanded(
+                child: TabBarView(
+                  controller: _tabController,
+                  children: [
+                    _TranscriptTab(meetingId: widget.meetingId),
+                    _SummaryTab(meetingId: widget.meetingId),
+                    _ActionsTab(meetingId: widget.meetingId),
+                  ],
+                ),
               ),
-            // Export dropdown — only when completed
-            if (meeting.isCompleted)
-              PopupMenuButton<String>(
-                icon: const Icon(Icons.download),
-                tooltip: 'Export',
-                onSelected: (value) => _handleExport(value, meeting),
-                itemBuilder: (_) => const [
-                  PopupMenuItem(
-                    value: 'pdf',
-                    child: Row(children: [
-                      Icon(Icons.picture_as_pdf),
-                      SizedBox(width: 8),
-                      Text('Export as PDF'),
-                    ]),
-                  ),
-                  PopupMenuItem(
-                    value: 'txt',
-                    child: Row(children: [
-                      Icon(Icons.text_snippet),
-                      SizedBox(width: 8),
-                      Text('Export as TXT'),
-                    ]),
-                  ),
-                  PopupMenuItem(
-                    value: 'email',
-                    child: Row(children: [
-                      Icon(Icons.email),
-                      SizedBox(width: 8),
-                      Text('Send via Email'),
-                    ]),
-                  ),
-                ],
-              ),
-            // Delete button — always visible
-            IconButton(
-              icon: const Icon(Icons.delete_outline, color: Color(0xFFEF4444)),
-              tooltip: 'Delete',
-              onPressed: () => _confirmDelete(context),
-            ),
-          ],
-          bottom: TabBar(
-            controller: _tabController,
-            tabs: const [
-              Tab(icon: Icon(Icons.transcribe), text: 'Transcript'),
-              Tab(icon: Icon(Icons.summarize), text: 'Summary'),
-              Tab(icon: Icon(Icons.task), text: 'Actions'),
             ],
           ),
-        ),
-        body: Column(
-          children: [
-            if (meeting.isProcessing)
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 16, vertical: 10),
-                color: const Color(0xFF2563EB).withOpacity(0.1),
-                child: const Row(
-                  children: [
-                    SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                    SizedBox(width: 12),
-                    Text('Processing your meeting... '
-                        'Results will appear here shortly.'),
-                  ],
-                ),
-              ),
-            if (meeting.isFailed)
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 16, vertical: 10),
-                color: const Color(0xFFEF4444).withOpacity(0.1),
-                child: const Row(
-                  children: [
-                    Icon(Icons.error_outline,
-                        color: Color(0xFFEF4444), size: 18),
-                    SizedBox(width: 12),
-                    Text('Processing failed. Please try again.',
-                        style: TextStyle(color: Color(0xFFEF4444))),
-                  ],
-                ),
-              ),
-            Expanded(
-              child: TabBarView(
-                controller: _tabController,
-                children: [
-                  _TranscriptTab(meetingId: widget.meetingId),
-                  _SummaryTab(meetingId: widget.meetingId),
-                  _ActionsTab(meetingId: widget.meetingId),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
+        );
+      },
       loading: () => const Scaffold(
         body: Center(child: CircularProgressIndicator()),
       ),
@@ -382,9 +384,7 @@ class _TranscriptTab extends ConsumerWidget {
           itemCount: transcript.segments.length,
           itemBuilder: (_, i) {
             final seg = transcript.segments[i];
-            final colorIndex =
-                (seg.speaker ?? 'Speaker 0').hashCode.abs() %
-                    Colors.primaries.length;
+            final colorIndex = (seg.speaker ?? 'Speaker 0').hashCode.abs() % Colors.primaries.length;
             return Padding(
               padding: const EdgeInsets.only(bottom: 12),
               child: Row(
@@ -394,8 +394,7 @@ class _TranscriptTab extends ConsumerWidget {
                     width: 48,
                     child: Text(
                       _formatTime(seg.startTime),
-                      style: const TextStyle(
-                          fontSize: 12, color: Colors.grey),
+                      style: const TextStyle(fontSize: 12, color: Colors.grey),
                     ),
                   ),
                   Expanded(
@@ -447,17 +446,14 @@ class _SummaryTab extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Meeting Minutes',
-                style: Theme.of(context).textTheme.headlineSmall),
+            Text('Meeting Minutes', style: Theme.of(context).textTheme.headlineSmall),
             const SizedBox(height: 12),
             Text(intel.summary ?? 'No summary generated yet.'),
             const SizedBox(height: 24),
-            Text('Key Insights',
-                style: Theme.of(context).textTheme.titleMedium),
+            Text('Key Insights', style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 8),
             if (intel.keyInsights.isEmpty)
-              Text('No insights extracted.',
-                  style: TextStyle(color: Colors.grey[500]))
+              Text('No insights extracted.', style: TextStyle(color: Colors.grey[500]))
             else
               ...intel.keyInsights.map(
                 (insight) => Padding(
@@ -465,8 +461,7 @@ class _SummaryTab extends ConsumerWidget {
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Icon(Icons.lightbulb_outline,
-                          size: 20, color: Color(0xFFF59E0B)),
+                      const Icon(Icons.lightbulb_outline, size: 20, color: Color(0xFFF59E0B)),
                       const SizedBox(width: 8),
                       Expanded(child: Text(insight)),
                     ],
@@ -501,12 +496,10 @@ class _ActionsTab extends ConsumerWidget {
       data: (intel) => ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          Text('Action Points',
-              style: Theme.of(context).textTheme.headlineSmall),
+          Text('Action Points', style: Theme.of(context).textTheme.headlineSmall),
           const SizedBox(height: 12),
           if (intel.actionPoints.isEmpty)
-            Text('No action points extracted.',
-                style: TextStyle(color: Colors.grey[500]))
+            Text('No action points extracted.', style: TextStyle(color: Colors.grey[500]))
           else
             ...intel.actionPoints.map(
               (action) => Card(

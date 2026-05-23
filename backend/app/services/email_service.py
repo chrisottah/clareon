@@ -23,44 +23,40 @@ def _send_email(to_email: str, subject: str, html_body: str) -> None:
 
         logger.info(f"Email sent to {to_email}: {subject}")
     except Exception as e:
-        # Don't crash the request if email fails — log it
         logger.error(f"Failed to send email to {to_email}: {e}")
 
 
-def send_verification_email(to_email: str, full_name: str, token: str) -> None:
-    subject = "Verify your Clareon account"
+def send_verification_otp(to_email: str, full_name: str, otp: str) -> None:
+    subject = "Your Clareon verification code"
     html = f"""
     <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto;">
         <h2 style="color: #2563EB;">Welcome to Clareon, {full_name}!</h2>
-        <p>Please verify your email address to get started.</p>
-        <p style="margin: 32px 0;">
-            <a href="#" style="background:#2563EB;color:white;padding:12px 24px;
-               border-radius:8px;text-decoration:none;font-weight:600;">
-                Verification Token: {token}
-            </a>
-        </p>
-        <p style="color:#666;font-size:14px;">
-            Enter this token in the app to verify your account.<br>
-            This token expires in 24 hours.
+        <p>Your email verification code is:</p>
+        <div style="text-align: center; margin: 32px 0;">
+            <span style="font-size: 48px; font-weight: bold; letter-spacing: 12px;
+                         color: #2563EB; font-family: monospace;">{otp}</span>
+        </div>
+        <p style="color:#666; font-size:14px;">
+            This code expires in <strong>10 minutes</strong>.<br>
+            If you didn't create a Clareon account, ignore this email.
         </p>
     </div>
     """
     _send_email(to_email, subject, html)
 
 
-def send_password_reset_email(to_email: str, full_name: str, token: str) -> None:
-    subject = "Reset your Clareon password"
+def send_password_reset_otp(to_email: str, full_name: str, otp: str) -> None:
+    subject = "Your Clareon password reset code"
     html = f"""
     <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto;">
         <h2 style="color: #2563EB;">Password Reset</h2>
-        <p>Hi {full_name}, here is your password reset token:</p>
-        <p style="font-size: 28px; font-weight: bold; letter-spacing: 4px;
-                  color: #2563EB; margin: 32px 0;">{token}</p>
-        <p style="color:#666;font-size:14px;">
-            Enter this token in the app to reset your password.<br>
-            This token expires in 1 hour.
-        </p>
-        <p style="color:#666;font-size:14px;">
+        <p>Hi {full_name}, your password reset code is:</p>
+        <div style="text-align: center; margin: 32px 0;">
+            <span style="font-size: 48px; font-weight: bold; letter-spacing: 12px;
+                         color: #2563EB; font-family: monospace;">{otp}</span>
+        </div>
+        <p style="color:#666; font-size:14px;">
+            This code expires in <strong>10 minutes</strong>.<br>
             If you didn't request this, ignore this email.
         </p>
     </div>

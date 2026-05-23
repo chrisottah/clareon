@@ -25,7 +25,9 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
     final success = await ref
         .read(authProvider.notifier)
         .forgotPassword(_emailCtrl.text.trim());
-    if (success && mounted) context.push('/reset-password');
+    if (success && mounted) {
+      context.push('/reset-password', extra: _emailCtrl.text.trim());
+    }
   }
 
   @override
@@ -46,7 +48,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
                   style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700)),
               const SizedBox(height: 8),
               Text(
-                "Enter your email and we'll send you a reset token.",
+                "Enter your email and we'll send you a 6-digit reset code.",
                 style: TextStyle(fontSize: 15, color: Colors.grey[500]),
               ),
               const SizedBox(height: 32),
@@ -78,9 +80,8 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
                 child: isLoading
                     ? const SizedBox(
                         height: 20, width: 20,
-                        child: CircularProgressIndicator(
-                            strokeWidth: 2, color: Colors.white))
-                    : const Text('Send Reset Token'),
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    : const Text('Send Reset Code'),
               ),
             ],
           ),

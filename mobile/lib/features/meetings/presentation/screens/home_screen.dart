@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../providers/meeting_provider.dart';
 import '../../data/repositories/meeting_repository.dart';
+import '../../../../main.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -42,9 +43,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     switch (status) {
       case 'processing':
         return Icons.hourglass_top;
+      case 'completed':
       case 'ready':
         return Icons.check_circle;
       case 'error':
+      case 'failed':
         return Icons.error;
       default:
         return Icons.help;
@@ -55,9 +58,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     switch (status) {
       case 'processing':
         return Colors.orange;
+      case 'completed':
       case 'ready':
         return Colors.green;
       case 'error':
+      case 'failed':
         return Colors.red;
       default:
         return Colors.grey;
@@ -90,6 +95,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(meetingsProvider);
+    final themeMode = ref.watch(themeModeProvider);
 
     // Show SnackBar when a meeting just completed processing
     ref.listen<MeetingsState>(meetingsProvider, (prev, next) {
@@ -121,6 +127,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       appBar: AppBar(
         title: const Text('Clareon'),
         actions: [
+          // Theme toggle
+          IconButton(
+            icon: Icon(
+              themeMode == ThemeMode.dark
+                  ? Icons.light_mode_rounded
+                  : Icons.dark_mode_rounded,
+            ),
+            tooltip: 'Toggle theme',
+            onPressed: () {
+              ref.read(themeModeProvider.notifier).state =
+                  themeMode == ThemeMode.light ? ThemeMode.dark : ThemeMode.light;
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: () => context.go('/login'),
@@ -175,17 +194,29 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     // Empty
     if (state.meetings.isEmpty) {
-      return const Center(
+      return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.mic, size: 64, color: Color(0xFF2563EB)),
-            SizedBox(height: 16),
-            Text('Your meetings will appear here',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
-            SizedBox(height: 8),
-            Text('Tap the button below to start recording',
-                style: TextStyle(color: Colors.grey)),
+            Container(
+              width: 100,
+              height: 100,
+              decoration: BoxDecoration(
+                color: const Color(0xFF2563EB).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(24),
+              ),
+              child: const Icon(Icons.mic, size: 48, color: Color(0xFF2563EB)),
+            ),
+            const SizedBox(height: 24),
+            Text(
+              'Your meetings will appear here',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Tap the button below to start recording',
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
           ],
         ),
       );
@@ -197,35 +228,51 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       itemCount: state.meetings.length,
       itemBuilder: (context, index) {
         final meeting = state.meetings[index];
-        return ListTile(
-          leading: Icon(
-            _statusIcon(meeting.status),
-            color: _statusColor(meeting.status),
-          ),
-          title: Text(
-            meeting.title,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-          subtitle: Text(
-            '${_formatDate(meeting.createdAt)} • ${_formatDuration(meeting.durationSeconds)}',
-          ),
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (meeting.status == 'ready')
-                const Icon(Icons.chevron_right),
-              IconButton(
-                icon: const Icon(Icons.delete_outline, color: Colors.red),
-                onPressed: () => _confirmDelete(meeting.id, meeting.title),
+        // Allow tapping on completed or ready meetings
+        final isViewable = meeting.status == 'completed' || meeting.status == 'ready';
+        return Card(
+          child: ListTile(
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            leading: Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: _statusColor(meeting.status).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
               ),
-            ],
+              child: Icon(
+                _statusIcon(meeting.status),
+                color: _statusColor(meeting.status),
+                size: 22,
+              ),
+            ),
+            title: Text(
+              meeting.title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            subtitle: Text(
+              '${_formatDate(meeting.createdAt)} • ${_formatDuration(meeting.durationSeconds)}',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (isViewable)
+                  Icon(Icons.chevron_right, color: Theme.of(context).textTheme.bodySmall?.color),
+                IconButton(
+                  icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20),
+                  onPressed: () => _confirmDelete(meeting.id, meeting.title),
+                ),
+              ],
+            ),
+            onTap: () {
+              if (isViewable) {
+                context.push('/meeting/${meeting.id}');
+              }
+            },
           ),
-          onTap: () {
-            if (meeting.status == 'ready') {
-              context.push('/meeting/${meeting.id}');
-            }
-          },
         );
       },
     );

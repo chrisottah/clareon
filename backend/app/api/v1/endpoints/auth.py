@@ -1,12 +1,13 @@
 from fastapi import APIRouter, Depends, status
+from fastapi.responses import HTMLResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
 from app.core.dependencies import get_current_user
 from app.schemas.auth import (
     SignupRequest, LoginRequest, TokenResponse, RefreshRequest,
-    ForgotPasswordRequest, ResetPasswordRequest, VerifyEmailRequest,
-    UserResponse, MessageResponse,
+    ForgotPasswordRequest, ResetPasswordRequest, VerifyOTPRequest,
+    KingsChatAuthRequest, UserResponse, MessageResponse,
 )
 from app.services import auth_service
 from app.models.user import User
@@ -16,9 +17,9 @@ router = APIRouter()
 
 @router.post("/signup", response_model=MessageResponse, status_code=status.HTTP_201_CREATED)
 async def signup(data: SignupRequest, db: AsyncSession = Depends(get_db)):
-    """Create a new account. Sends verification email."""
+    """Create a new account. Sends verification OTP via email."""
     await auth_service.signup(db, data)
-    return {"message": "Account created. Please check your email to verify your account."}
+    return {"message": "Account created. Please check your email for your 6-digit verification code."}
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -28,24 +29,56 @@ async def login(data: LoginRequest, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/verify-email", response_model=MessageResponse)
-async def verify_email(data: VerifyEmailRequest, db: AsyncSession = Depends(get_db)):
-    """Verify email address using token from email."""
-    await auth_service.verify_email(db, data.token)
+async def verify_email(data: VerifyOTPRequest, db: AsyncSession = Depends(get_db)):
+    """Verify email address using 6-digit OTP from email."""
+    await auth_service.verify_email_otp(db, data.email, data.otp)
     return {"message": "Email verified successfully. You can now log in."}
+
+
+@router.post("/resend-otp", response_model=MessageResponse)
+async def resend_otp(data: ForgotPasswordRequest, db: AsyncSession = Depends(get_db)):
+    """Resend verification OTP to email."""
+    await auth_service.resend_verification_otp(db, data.email)
+    return {"message": "If your email is registered and unverified, a new code has been sent."}
 
 
 @router.post("/forgot-password", response_model=MessageResponse)
 async def forgot_password(data: ForgotPasswordRequest, db: AsyncSession = Depends(get_db)):
-    """Send password reset email."""
+    """Send password reset OTP via email."""
     await auth_service.forgot_password(db, data.email)
-    return {"message": "If an account exists with this email, a reset link has been sent."}
+    return {"message": "If an account exists with this email, a reset code has been sent."}
 
 
 @router.post("/reset-password", response_model=MessageResponse)
 async def reset_password(data: ResetPasswordRequest, db: AsyncSession = Depends(get_db)):
-    """Reset password using token from email."""
-    await auth_service.reset_password(db, data.token, data.new_password)
+    """Reset password using OTP from email."""
+    await auth_service.reset_password(db, data.email, data.otp, data.new_password)
     return {"message": "Password reset successfully. You can now log in."}
+
+
+@router.post("/kingschat", response_model=TokenResponse)
+async def kingschat_login(data: KingsChatAuthRequest, db: AsyncSession = Depends(get_db)):
+    """Login via KingsChat OAuth. Creates account if first time."""
+    return await auth_service.kingschat_auth(db, data)
+
+
+@router.get("/kingschat/callback", response_class=HTMLResponse)
+async def kingschat_callback():
+    """KingsChat redirects here after login. Redirects to app custom scheme."""
+    return """
+    <!DOCTYPE html>
+    <html>
+    <head><title>Login Complete</title></head>
+    <body style="background:#0B0F19;color:white;font-family:sans-serif;text-align:center;padding-top:40vh;">
+        <h2 style="color:#2563EB;">Login Successful</h2>
+        <p>Redirecting back to Clareon...</p>
+        <script>
+            const params = new URLSearchParams(window.location.search);
+            window.location.href = 'clareon://callback?' + params.toString();
+        </script>
+    </body>
+    </html>
+    """
 
 
 @router.post("/refresh", response_model=TokenResponse)
