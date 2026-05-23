@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, status, Request
 from fastapi.responses import HTMLResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -62,10 +62,32 @@ async def kingschat_login(data: KingsChatAuthRequest, db: AsyncSession = Depends
     return await auth_service.kingschat_auth(db, data)
 
 
-@router.get("/kingschat/callback", response_class=HTMLResponse)
-async def kingschat_callback():
-    """KingsChat redirects here after login. Redirects to app custom scheme."""
-    return """
+@router.api_route("/kingschat/callback", methods=["GET", "POST"], response_class=HTMLResponse)
+async def kingschat_callback(request: Request):
+    """KingsChat redirects here after login. Extracts tokens from GET or POST, then redirects to app custom scheme."""
+    access_token = None
+    refresh_token = None
+
+    # Try GET query params
+    access_token = request.query_params.get("accessToken") or request.query_params.get("access_token")
+    refresh_token = request.query_params.get("refreshToken") or request.query_params.get("refresh_token")
+
+    # Try POST form data
+    if not access_token:
+        try:
+            form = await request.form()
+            access_token = form.get("accessToken") or form.get("access_token")
+            refresh_token = form.get("refreshToken") or form.get("refresh_token")
+        except Exception:
+            pass
+
+    if not access_token:
+        return HTMLResponse(content="<h1>Login failed: no token received</h1>", status_code=400)
+
+    refresh_param = f"&refreshToken={refresh_token}" if refresh_token else ""
+    redirect_url = f"clareon://callback?accessToken={access_token}{refresh_param}"
+
+    return HTMLResponse(f"""
     <!DOCTYPE html>
     <html>
     <head><title>Login Complete</title></head>
@@ -73,12 +95,11 @@ async def kingschat_callback():
         <h2 style="color:#2563EB;">Login Successful</h2>
         <p>Redirecting back to Clareon...</p>
         <script>
-            const params = new URLSearchParams(window.location.search);
-            window.location.href = 'clareon://callback?' + params.toString();
+            window.location.href = "{redirect_url}";
         </script>
     </body>
     </html>
-    """
+    """)
 
 
 @router.post("/refresh", response_model=TokenResponse)

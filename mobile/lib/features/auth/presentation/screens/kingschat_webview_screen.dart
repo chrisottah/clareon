@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import '../providers/auth_provider.dart';
+import '../../../../core/config/app_config.dart';
 
 class KingsChatWebViewScreen extends ConsumerStatefulWidget {
   const KingsChatWebViewScreen({super.key});
@@ -17,13 +18,14 @@ class _KingsChatWebViewScreenState
   late final WebViewController _controller;
   bool _isLoading = true;
 
-  // Use a fake redirect that we'll intercept before it loads
-  static const String _redirectUri = 'https://clareon.online/api/v1/auth/kingschat/callback';
+  String get _redirectUri => '${AppConfig.baseUrl}/auth/kingschat/callback';
+
   static const String _clientId = 'com.kingschat';
 
   String get _loginUrl =>
       'https://accounts.kingsch.at/?client_id=$_clientId'
       '&scopes=["conference_calls"]'
+      '&post_redirect=true'
       '&redirect_uri=$_redirectUri';
 
   @override
@@ -32,79 +34,49 @@ class _KingsChatWebViewScreenState
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setNavigationDelegate(NavigationDelegate(
-        onPageStarted: (url) {
-          setState(() => _isLoading = true);
-          // Check if this URL contains tokens
-          if (url.contains('accessToken') || url.contains('access_token')) {
-            _handleCallback(url);
-          }
-        },
+        onPageStarted: (_) => setState(() => _isLoading = true),
         onPageFinished: (_) => setState(() => _isLoading = false),
         onNavigationRequest: (request) {
-          final url = request.url;
+          final uri = Uri.tryParse(request.url);
+          if (uri == null) return NavigationDecision.navigate;
 
-          // Intercept any URL with tokens before it loads
-          if (url.contains('accessToken') || url.contains('access_token')) {
-            _handleCallback(url);
+          if (uri.scheme == 'clareon' && uri.host == 'callback') {
+            final accessToken = uri.queryParameters['accessToken'];
+            final refreshToken = uri.queryParameters['refreshToken'];
+
+            if (accessToken != null && accessToken.isNotEmpty) {
+              _authenticate(accessToken, refreshToken);
+            } else {
+              _showError('Login failed: no token received from KingsChat.');
+            }
             return NavigationDecision.prevent;
           }
-
           return NavigationDecision.navigate;
         },
       ))
       ..loadRequest(Uri.parse(_loginUrl));
   }
 
-  void _handleCallback(String url) {
-    final uri = Uri.parse(url);
+  Future<void> _authenticate(String accessToken, String? refreshToken) async {
+    setState(() => _isLoading = true);
 
-    // Try query parameters
-    String? accessToken =
-        uri.queryParameters['accessToken'] ??
-        uri.queryParameters['access_token'];
-
-    // Try fragment
-    if (accessToken == null && uri.fragment.isNotEmpty) {
-      try {
-        final fragmentUri = Uri.parse('https://dummy.com?${uri.fragment}');
-        accessToken =
-            fragmentUri.queryParameters['accessToken'] ??
-            fragmentUri.queryParameters['access_token'];
-      } catch (_) {}
-    }
-
-    // Try parsing the full URL string for token patterns
-    if (accessToken == null) {
-      final tokenMatch = RegExp(r'access[Tt]oken=([^&\s]+)').firstMatch(url);
-      if (tokenMatch != null) {
-        accessToken = Uri.decodeComponent(tokenMatch.group(1)!);
-      }
-    }
-
-    if (accessToken != null) {
-      _authenticate(accessToken, null);
-    } else {
-      // Don't show error for the redirect URI itself
-      if (!url.startsWith(_redirectUri)) {
-        _showError('Could not extract token. URL: ${url.length > 100 ? '${url.substring(0, 100)}...' : url}');
-      }
-    }
-  }
-
-  Future<void> _authenticate(
-      String accessToken, String? refreshToken) async {
     final success = await ref
         .read(authProvider.notifier)
         .loginWithKingsChat(accessToken, refreshToken);
-    if (success && mounted) context.go('/home');
+
+    if (success && mounted) {
+      context.go('/home');
+    } else if (mounted) {
+      _showError('Login failed. Please try again.');
+    }
   }
 
   void _showError(String message) {
+    setState(() => _isLoading = false);
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(message),
-      backgroundColor: const Color(0xFFEF4444),
-    ));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: const Color(0xFFEF4444)),
+    );
     context.pop();
   }
 
