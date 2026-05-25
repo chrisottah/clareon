@@ -7,7 +7,9 @@ class ApiClient {
 
   static final _storage = const FlutterSecureStorage();
 
-  static Dio get dio {
+  static final Dio dio = _createDio();
+
+  static Dio _createDio() {
     final d = Dio(
       BaseOptions(
         baseUrl: AppConfig.baseUrl,
@@ -17,7 +19,6 @@ class ApiClient {
       ),
     );
 
-    // Attach access token to every request
     d.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) async {
@@ -28,11 +29,9 @@ class ApiClient {
           return handler.next(options);
         },
         onError: (error, handler) async {
-          // Token expired — try refresh
           if (error.response?.statusCode == 401) {
             final refreshed = await _tryRefresh(d);
             if (refreshed) {
-              // Retry original request with new token
               final token = await _storage.read(key: AppConfig.accessTokenKey);
               error.requestOptions.headers['Authorization'] = 'Bearer $token';
               final response = await d.fetch(error.requestOptions);

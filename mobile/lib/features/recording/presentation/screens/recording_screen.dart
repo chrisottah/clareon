@@ -1,8 +1,9 @@
+// lib/features/recording/presentation/screens/recording_screen.dart
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../providers/recording_provider.dart';
-import '../widgets/recording_timer.dart';
 
 class RecordingScreen extends ConsumerStatefulWidget {
   const RecordingScreen({super.key});
@@ -17,7 +18,6 @@ class _RecordingScreenState extends ConsumerState<RecordingScreen> {
   @override
   void initState() {
     super.initState();
-    // Auto-start recording when screen opens
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(recordingProvider.notifier).startRecording();
     });
@@ -30,17 +30,11 @@ class _RecordingScreenState extends ConsumerState<RecordingScreen> {
   }
 
   Future<void> _stopAndUpload() async {
-    // Show title dialog before stopping
     final title = await _showTitleDialog();
-    if (title == null) return; // User cancelled
-
-    final meetingId = await ref
-        .read(recordingProvider.notifier)
-        .stopAndUpload(title);
-
-    if (meetingId != null && mounted) {
-      context.go('/home');
-    }
+    if (title == null) return;
+    final meetingId =
+        await ref.read(recordingProvider.notifier).stopAndUpload(title);
+    if (meetingId != null && mounted) context.go('/home');
   }
 
   Future<String?> _showTitleDialog() async {
@@ -53,9 +47,8 @@ class _RecordingScreenState extends ConsumerState<RecordingScreen> {
         content: TextField(
           controller: _titleCtrl,
           autofocus: true,
-          decoration: const InputDecoration(
-            hintText: 'e.g. Weekly Standup',
-          ),
+          decoration:
+              const InputDecoration(hintText: 'e.g. Weekly Standup'),
           textCapitalization: TextCapitalization.words,
           onSubmitted: (_) => Navigator.pop(ctx, _titleCtrl.text),
         ),
@@ -77,12 +70,12 @@ class _RecordingScreenState extends ConsumerState<RecordingScreen> {
   Widget build(BuildContext context) {
     final state = ref.watch(recordingProvider);
 
-    // Navigate away after upload
     ref.listen(recordingProvider, (_, next) {
       if (next.status == RecordingStatus.uploaded && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Meeting uploaded! Processing will begin shortly.'),
+            content: Text(
+                'Meeting uploaded — processing will begin shortly'),
             backgroundColor: Color(0xFF22C55E),
           ),
         );
@@ -96,25 +89,27 @@ class _RecordingScreenState extends ConsumerState<RecordingScreen> {
         if (!didPop) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Stop the recording before leaving.'),
-            ),
+                content:
+                    Text('Stop the recording before leaving.')),
           );
         }
       },
       child: Scaffold(
+        backgroundColor: Colors.black,
         appBar: AppBar(
-          title: const Text('Recording'),
+          backgroundColor: Colors.black,
+          foregroundColor: Colors.white,
+          title: const Text('Recording',
+              style: TextStyle(color: Colors.white)),
           automaticallyImplyLeading: false,
+          elevation: 0,
         ),
-        body: SafeArea(
-          child: _buildBody(state),
-        ),
+        body: SafeArea(child: _buildBody(state)),
       ),
     );
   }
 
   Widget _buildBody(RecordingState state) {
-    // Permission error or general error
     if (state.status == RecordingStatus.error) {
       return Center(
         child: Padding(
@@ -122,12 +117,13 @@ class _RecordingScreenState extends ConsumerState<RecordingScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.mic_off, size: 64, color: Color(0xFFEF4444)),
+              const Icon(Icons.mic_off,
+                  size: 64, color: Color(0xFFEF4444)),
               const SizedBox(height: 16),
               Text(
                 state.errorMessage ?? 'An error occurred',
                 textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.grey[400]),
+                style: const TextStyle(color: Colors.white54),
               ),
               const SizedBox(height: 24),
               ElevatedButton(
@@ -143,7 +139,6 @@ class _RecordingScreenState extends ConsumerState<RecordingScreen> {
       );
     }
 
-    // Uploading
     if (state.status == RecordingStatus.uploading ||
         state.status == RecordingStatus.stopping) {
       return Center(
@@ -156,112 +151,315 @@ class _RecordingScreenState extends ConsumerState<RecordingScreen> {
               state.status == RecordingStatus.stopping
                   ? 'Finalizing recording...'
                   : 'Uploading meeting...',
-              style: TextStyle(color: Colors.grey[400]),
+              style: const TextStyle(color: Colors.white54),
             ),
           ],
         ),
       );
     }
 
-    // Requesting permission
     if (state.status == RecordingStatus.requestingPermission) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(
+          child:
+              CircularProgressIndicator(color: Color(0xFF2563EB)));
     }
 
-    // Active recording / paused
     final session = state.session;
     final isPaused = state.status == RecordingStatus.paused;
 
     return Padding(
-      padding: const EdgeInsets.all(32),
+      padding: const EdgeInsets.symmetric(horizontal: 32),
       child: Column(
         children: [
-          const Spacer(),
+          const Spacer(flex: 2),
 
-          // Timer display
-          RecordingTimer(
-            duration: session?.formattedDuration ?? '00:00',
-            isPaused: isPaused,
+          // Live waveform or flat line when paused
+          SizedBox(
+            height: 80,
+            child: isPaused
+                ? Center(
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: List.generate(
+                        24,
+                        (_) => Container(
+                          width: 3,
+                          height: 6,
+                          margin: const EdgeInsets.symmetric(horizontal: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
+                      ),
+                    ),
+                  )
+                : const _LiveWaveform(),
           ),
 
-          const Spacer(),
+          const SizedBox(height: 28),
+
+          // Status pill
+          Container(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+            decoration: BoxDecoration(
+              color: isPaused
+                  ? const Color(0xFFF59E0B).withOpacity(0.12)
+                  : const Color(0xFFEF4444).withOpacity(0.12),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: isPaused
+                    ? const Color(0xFFF59E0B).withOpacity(0.35)
+                    : const Color(0xFFEF4444).withOpacity(0.35),
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (!isPaused) ...[
+                  _PulsingDot(color: const Color(0xFFEF4444)),
+                  const SizedBox(width: 8),
+                ] else ...[
+                  Container(
+                    width: 8,
+                    height: 8,
+                    decoration: const BoxDecoration(
+                        color: Color(0xFFF59E0B),
+                        shape: BoxShape.circle),
+                  ),
+                  const SizedBox(width: 8),
+                ],
+                Text(
+                  isPaused ? 'PAUSED' : 'RECORDING',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 2,
+                    color: isPaused
+                        ? const Color(0xFFF59E0B)
+                        : const Color(0xFFEF4444),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          // Timer
+          Text(
+            session?.formattedDuration ?? '00:00',
+            style: const TextStyle(
+              fontSize: 64,
+              fontWeight: FontWeight.w200,
+              color: Colors.white,
+              letterSpacing: 4,
+            ),
+          ),
+
+          const Spacer(flex: 2),
 
           // Controls
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // Pause / Resume
-              _ControlButton(
-                icon: isPaused ? Icons.play_arrow : Icons.pause,
-                label: isPaused ? 'Resume' : 'Pause',
-                color: const Color(0xFF2D2D3F),
+              _CircleControl(
+                icon: isPaused
+                    ? Icons.play_arrow_rounded
+                    : Icons.pause_rounded,
                 size: 64,
+                color: Colors.white.withOpacity(0.1),
+                iconColor: Colors.white,
                 onTap: isPaused
-                    ? () => ref.read(recordingProvider.notifier).resumeRecording()
-                    : () => ref.read(recordingProvider.notifier).pauseRecording(),
+                    ? () => ref
+                        .read(recordingProvider.notifier)
+                        .resumeRecording()
+                    : () => ref
+                        .read(recordingProvider.notifier)
+                        .pauseRecording(),
               ),
-
-              const SizedBox(width: 32),
-
-              // Stop
-              _ControlButton(
-                icon: Icons.stop,
-                label: 'Stop',
-                color: const Color(0xFFEF4444),
+              const SizedBox(width: 28),
+              _CircleControl(
+                icon: Icons.stop_rounded,
                 size: 80,
+                color: const Color(0xFFEF4444),
+                iconColor: Colors.white,
                 onTap: _stopAndUpload,
+                glow: true,
               ),
             ],
           ),
 
-          const SizedBox(height: 48),
-
+          const SizedBox(height: 36),
           Text(
-            'Recording will continue if you lock your screen.',
-            style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-            textAlign: TextAlign.center,
+            'Recording continues when screen locks',
+            style: TextStyle(
+                fontSize: 12, color: Colors.white.withOpacity(0.25)),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 32),
         ],
       ),
     );
   }
 }
 
-class _ControlButton extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final Color color;
-  final double size;
-  final VoidCallback onTap;
+// ─── Live Waveform ────────────────────────────────────────────────────────────
 
-  const _ControlButton({
+class _LiveWaveform extends StatefulWidget {
+  const _LiveWaveform();
+
+  @override
+  State<_LiveWaveform> createState() => _LiveWaveformState();
+}
+
+class _LiveWaveformState extends State<_LiveWaveform>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 1200))
+      ..repeat();
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _ctrl,
+      builder: (_, __) => CustomPaint(
+        painter: _WaveformPainter(progress: _ctrl.value),
+        size: const Size(double.infinity, 80),
+      ),
+    );
+  }
+}
+
+class _WaveformPainter extends CustomPainter {
+  final double progress;
+  _WaveformPainter({required this.progress});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..strokeCap = StrokeCap.round
+      ..strokeWidth = 3;
+
+    const barCount = 36;
+    final barWidth = size.width / (barCount * 2);
+
+    for (int i = 0; i < barCount; i++) {
+      final x = i * barWidth * 2 + barWidth;
+      final phase = (i / barCount) + progress;
+      final h = (math.sin(phase * math.pi * 2) * 0.4 + 0.6) *
+          (math.sin(i * 0.4 + progress * 3) * 0.3 + 0.7) *
+          size.height *
+          0.85;
+      final opacity = 0.3 + (h / (size.height * 0.85)) * 0.7;
+      paint.color = const Color(0xFF2563EB).withOpacity(opacity);
+      canvas.drawLine(
+        Offset(x, size.height / 2 - h / 2),
+        Offset(x, size.height / 2 + h / 2),
+        paint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_WaveformPainter old) => old.progress != progress;
+}
+
+// ─── Circle Control ───────────────────────────────────────────────────────────
+
+class _CircleControl extends StatelessWidget {
+  final IconData icon;
+  final double size;
+  final Color color;
+  final Color iconColor;
+  final VoidCallback onTap;
+  final bool glow;
+
+  const _CircleControl({
     required this.icon,
-    required this.label,
-    required this.color,
     required this.size,
+    required this.color,
+    required this.iconColor,
     required this.onTap,
+    this.glow = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        GestureDetector(
-          onTap: onTap,
-          child: Container(
-            width: size,
-            height: size,
-            decoration: BoxDecoration(
-              color: color,
-              shape: BoxShape.circle,
-            ),
-            child: Icon(icon, color: Colors.white, size: size * 0.45),
-          ),
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          color: color,
+          shape: BoxShape.circle,
+          boxShadow: glow
+              ? [
+                  BoxShadow(
+                    color: color.withOpacity(0.4),
+                    blurRadius: 20,
+                    spreadRadius: 2,
+                  )
+                ]
+              : null,
         ),
-        const SizedBox(height: 8),
-        Text(label, style: TextStyle(color: Colors.grey[400], fontSize: 12)),
-      ],
+        child: Icon(icon, color: iconColor, size: size * 0.45),
+      ),
+    );
+  }
+}
+
+// ─── Pulsing Dot ──────────────────────────────────────────────────────────────
+
+class _PulsingDot extends StatefulWidget {
+  final Color color;
+  const _PulsingDot({required this.color});
+
+  @override
+  State<_PulsingDot> createState() => _PulsingDotState();
+}
+
+class _PulsingDotState extends State<_PulsingDot>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 900))
+      ..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: Tween<double>(begin: 0.3, end: 1.0).animate(_ctrl),
+      child: Container(
+        width: 8,
+        height: 8,
+        decoration: BoxDecoration(
+            color: widget.color, shape: BoxShape.circle),
+      ),
     );
   }
 }

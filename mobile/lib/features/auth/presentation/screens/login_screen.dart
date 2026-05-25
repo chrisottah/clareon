@@ -1,8 +1,12 @@
+// lib/features/auth/presentation/screens/login_screen.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/auth_text_field.dart';
+import '../widgets/animated_orb.dart';
+import '../widgets/clareon_logo.dart';
+import '../widgets/shared_ui.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -11,15 +15,29 @@ class LoginScreen extends ConsumerStatefulWidget {
   ConsumerState<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends ConsumerState<LoginScreen> {
+class _LoginScreenState extends ConsumerState<LoginScreen>
+    with SingleTickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
   final _emailCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
+  late final AnimationController _fadeCtrl;
+  late final Animation<double> _fadeAnim;
+
+  @override
+  void initState() {
+    super.initState();
+    _fadeCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    )..forward();
+    _fadeAnim = CurvedAnimation(parent: _fadeCtrl, curve: Curves.easeOut);
+  }
 
   @override
   void dispose() {
     _emailCtrl.dispose();
     _passwordCtrl.dispose();
+    _fadeCtrl.dispose();
     super.dispose();
   }
 
@@ -35,128 +53,125 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   Widget build(BuildContext context) {
     final state = ref.watch(authProvider);
     final isLoading = state.status == AuthStatus.loading;
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
 
     return Scaffold(
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SizedBox(height: 48),
-                Row(
-                  children: [
-                    Container(
-                      width: 44, height: 44,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF2563EB),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: const Icon(Icons.mic, color: Colors.white, size: 24),
-                    ),
-                    const SizedBox(width: 12),
-                    const Text('Clareon',
-                        style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-                  ],
-                ),
-                const SizedBox(height: 40),
-                const Text('Welcome back',
-                    style: TextStyle(fontSize: 28, fontWeight: FontWeight.w700)),
-                const SizedBox(height: 8),
-                Text('Sign in to your account',
-                    style: TextStyle(fontSize: 16, color: Colors.grey[500])),
-                const SizedBox(height: 32),
-                if (state.errorMessage != null) ...[
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFEF4444).withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: const Color(0xFFEF4444).withOpacity(0.3)),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.error_outline, color: Color(0xFFEF4444), size: 18),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(state.errorMessage!,
-                              style: const TextStyle(color: Color(0xFFEF4444))),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                ],
-                AuthTextField(
-                  controller: _emailCtrl,
-                  label: 'Email',
-                  keyboardType: TextInputType.emailAddress,
-                  validator: (v) =>
-                      v == null || !v.contains('@') ? 'Enter a valid email' : null,
-                ),
-                const SizedBox(height: 16),
-                AuthTextField(
-                  controller: _passwordCtrl,
-                  label: 'Password',
-                  isPassword: true,
-                  textInputAction: TextInputAction.done,
-                  validator: (v) =>
-                      v == null || v.isEmpty ? 'Enter your password' : null,
-                ),
-                const SizedBox(height: 8),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton(
-                    onPressed: () => context.push('/forgot-password'),
-                    child: const Text('Forgot password?'),
+      body: Stack(
+        children: [
+          // Subtle blue glow behind orb
+          Positioned(
+            top: -80,
+            left: 0,
+            right: 0,
+            child: Center(
+              child: Container(
+                width: 340,
+                height: 340,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: RadialGradient(
+                    colors: [
+                      const Color(0xFF2563EB)
+                          .withOpacity(isDark ? 0.18 : 0.10),
+                      Colors.transparent,
+                    ],
                   ),
                 ),
-                const SizedBox(height: 24),
-                ElevatedButton(
-                  onPressed: isLoading ? null : _submit,
-                  child: isLoading
-                      ? const SizedBox(
-                          height: 20, width: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                      : const Text('Sign In'),
-                ),
-                const SizedBox(height: 16),
-                const Row(children: [
-                  Expanded(child: Divider()),
-                  Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 12),
-                    child: Text('or', style: TextStyle(color: Colors.grey)),
-                  ),
-                  Expanded(child: Divider()),
-                ]),
-                const SizedBox(height: 16),
-                OutlinedButton.icon(
-                  onPressed: () => context.push('/kingschat-login'),
-                  icon: const Icon(Icons.chat_bubble_outline, size: 20),
-                  label: const Text('Continue with KingsChat'),
-                  style: OutlinedButton.styleFrom(
-                    minimumSize: const Size(double.infinity, 52),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                ),
-                const SizedBox(height: 24),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text("Don't have an account?",
-                        style: TextStyle(color: Colors.grey[500])),
-                    TextButton(
-                      onPressed: () => context.push('/signup'),
-                      child: const Text('Sign up'),
-                    ),
-                  ],
-                ),
-              ],
+              ),
             ),
           ),
-        ),
+          SafeArea(
+            child: FadeTransition(
+              opacity: _fadeAnim,
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 28),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const SizedBox(height: 20),
+                      const Center(child: AnimatedOrb(size: 60)),
+                      const SizedBox(height: 20),
+                      const Center(child: ClareonLogo()),
+                      const SizedBox(height: 8),
+                      Center(
+                        child: Text(
+                          'AI meeting intelligence',
+                          style: theme.textTheme.bodyMedium
+                              ?.copyWith(letterSpacing: 0.4),
+                        ),
+                      ),
+                      const SizedBox(height: 52),
+                      Text('Welcome back',
+                          style: theme.textTheme.headlineMedium),
+                      const SizedBox(height: 4),
+                      Text('Sign in to continue',
+                          style: theme.textTheme.bodyMedium),
+                      const SizedBox(height: 32),
+                      if (state.errorMessage != null)
+                        ErrorBanner(message: state.errorMessage!),
+                      AuthTextField(
+                        controller: _emailCtrl,
+                        label: 'Email',
+                        keyboardType: TextInputType.emailAddress,
+                        validator: (v) => v == null || !v.contains('@')
+                            ? 'Enter a valid email'
+                            : null,
+                      ),
+                      const SizedBox(height: 16),
+                      AuthTextField(
+                        controller: _passwordCtrl,
+                        label: 'Password',
+                        isPassword: true,
+                        textInputAction: TextInputAction.done,
+                        validator: (v) => v == null || v.isEmpty
+                            ? 'Enter your password'
+                            : null,
+                      ),
+                      const SizedBox(height: 8),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton(
+                          onPressed: () =>
+                              context.push('/forgot-password'),
+                          child: const Text('Forgot password?'),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      ClareonButton(
+                        onPressed: isLoading ? null : _submit,
+                        isLoading: isLoading,
+                        label: 'Sign In',
+                      ),
+                      const SizedBox(height: 20),
+                      const OrDivider(),
+                      const SizedBox(height: 20),
+                      KingsChatButton(
+                        onPressed: () =>
+                            context.push('/kingschat-login'),
+                      ),
+                      const SizedBox(height: 32),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text("Don't have an account?",
+                              style: theme.textTheme.bodyMedium),
+                          TextButton(
+                            onPressed: () => context.push('/signup'),
+                            child: const Text('Sign up'),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 40),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

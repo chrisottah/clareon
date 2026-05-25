@@ -1,3 +1,4 @@
+// lib/features/meetings/presentation/screens/meeting_detail_screen.dart
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -32,10 +33,7 @@ class _MeetingDetailScreenState extends ConsumerState<MeetingDetailScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
-    // Force fresh fetch on every screen open
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _refreshAll();
-    });
+    WidgetsBinding.instance.addPostFrameCallback((_) => _refreshAll());
     _startPolling();
   }
 
@@ -51,7 +49,6 @@ class _MeetingDetailScreenState extends ConsumerState<MeetingDetailScreen>
       if (!mounted) return;
       final meeting = ref.read(meetingDetailProvider(widget.meetingId));
       meeting.whenData((m) {
-        debugPrint('Meeting status: ${m.status}, isCompleted: ${m.isCompleted}');
         if (m.isCompleted || m.isFailed) {
           _pollTimer?.cancel();
           _refreshAll();
@@ -79,32 +76,32 @@ class _MeetingDetailScreenState extends ConsumerState<MeetingDetailScreen>
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Delete Meeting'),
+        title: const Text('Delete meeting?'),
         content: const Text(
-            'This will permanently delete the recording, transcript, and all analysis. This cannot be undone.'),
+          'This permanently deletes the recording, transcript, and all analysis.',
+          style: TextStyle(fontSize: 14),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
             child: const Text('Cancel'),
           ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFEF4444)),
+          TextButton(
+            style: TextButton.styleFrom(
+                foregroundColor: const Color(0xFFEF4444)),
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('Delete'),
           ),
         ],
       ),
     );
-
     if (confirmed == true && mounted) {
       final success = await ref
           .read(meetingsProvider.notifier)
           .deleteMeeting(widget.meetingId);
       if (success && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Meeting deleted')),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('Meeting deleted')));
         context.go('/home');
       }
     }
@@ -115,7 +112,7 @@ class _MeetingDetailScreenState extends ConsumerState<MeetingDetailScreen>
     final newTitle = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Edit Title'),
+        title: const Text('Edit title'),
         content: TextField(
           controller: ctrl,
           autofocus: true,
@@ -134,7 +131,6 @@ class _MeetingDetailScreenState extends ConsumerState<MeetingDetailScreen>
         ],
       ),
     );
-
     if (newTitle != null && newTitle.isNotEmpty && mounted) {
       await ref
           .read(meetingsProvider.notifier)
@@ -146,7 +142,6 @@ class _MeetingDetailScreenState extends ConsumerState<MeetingDetailScreen>
   void _exportCurrentTab(Meeting meeting) {
     final index = _tabController.index;
     final meetingId = widget.meetingId;
-
     if (index == 0) {
       final transcriptAsync = ref.read(transcriptProvider(meetingId));
       transcriptAsync.whenData((transcript) {
@@ -164,13 +159,11 @@ class _MeetingDetailScreenState extends ConsumerState<MeetingDetailScreen>
             '${intel.keyInsights.map((i) => '• $i').join('\n')}';
         ExportService.shareSummary(text, title: meeting.title);
       });
-    } else if (index == 2) {
+    } else {
       final intelAsync = ref.read(intelligenceProvider(meetingId));
       intelAsync.whenData((intel) {
-        ExportService.shareActionPoints(
-          intel.actionPoints,
-          title: meeting.title,
-        );
+        ExportService.shareActionPoints(intel.actionPoints,
+            title: meeting.title);
       });
     }
   }
@@ -181,8 +174,8 @@ class _MeetingDetailScreenState extends ConsumerState<MeetingDetailScreen>
     final intelAsync = ref.read(intelligenceProvider(meetingId));
 
     String fullText = 'MEETING: ${meeting.title}\n';
-    fullText += 'Date: ${meeting.createdAt}\n';
-    fullText += 'Duration: ${meeting.formattedDuration}\n\n';
+    fullText +=
+        'Date: ${meeting.createdAt}\nDuration: ${meeting.formattedDuration}\n\n';
 
     transcriptAsync.whenData((transcript) {
       fullText += '─── TRANSCRIPT ───\n\n';
@@ -192,22 +185,19 @@ class _MeetingDetailScreenState extends ConsumerState<MeetingDetailScreen>
       }).join('\n');
 
       intelAsync.whenData((intel) {
-        fullText += '\n\n─── MEETING MINUTES ───\n\n${intel.summary ?? ''}';
+        fullText +=
+            '\n\n─── MEETING MINUTES ───\n\n${intel.summary ?? ''}';
         fullText += '\n\n─── KEY INSIGHTS ───\n\n';
         fullText += intel.keyInsights.map((i) => '• $i').join('\n');
         fullText += '\n\n─── ACTION POINTS ───\n\n';
         fullText += intel.actionPoints.map((a) => '☐ $a').join('\n');
-
         switch (type) {
           case 'pdf':
             ExportService.exportAsPdf(fullText, title: meeting.title);
-            break;
           case 'txt':
             ExportService.exportAsTxt(fullText, title: meeting.title);
-            break;
           case 'email':
             ExportService.shareViaEmail(fullText, title: meeting.title);
-            break;
         }
       });
     });
@@ -215,145 +205,207 @@ class _MeetingDetailScreenState extends ConsumerState<MeetingDetailScreen>
 
   @override
   Widget build(BuildContext context) {
-    final meetingAsync = ref.watch(meetingDetailProvider(widget.meetingId));
+    final meetingAsync =
+        ref.watch(meetingDetailProvider(widget.meetingId));
 
     return meetingAsync.when(
-      data: (meeting) {
-        // TEMP DEBUG — remove after confirming it works
-        debugPrint('Meeting status: ${meeting.status}, isCompleted: ${meeting.isCompleted}');
-
-        return Scaffold(
-          appBar: AppBar(
-            title: GestureDetector(
-              onTap: () => _editTitle(context, meeting.title),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Flexible(
-                    child: Text(
-                      meeting.title,
+      data: (meeting) => Scaffold(
+        appBar: AppBar(
+          title: GestureDetector(
+            onTap: () => _editTitle(context, meeting.title),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Flexible(
+                  child: Text(meeting.title,
                       overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  const SizedBox(width: 4),
-                  const Icon(Icons.edit, size: 16, color: Colors.grey),
-                ],
-              ),
-            ),
-            actions: [
-              // Refresh button
-              IconButton(
-                icon: const Icon(Icons.refresh),
-                tooltip: 'Refresh',
-                onPressed: _refreshAll,
-              ),
-              // Share — only when completed
-              if (meeting.isCompleted)
-                IconButton(
-                  icon: const Icon(Icons.share),
-                  tooltip: 'Share',
-                  onPressed: () => _exportCurrentTab(meeting),
+                      style: const TextStyle(fontSize: 17)),
                 ),
-              // Export — only when completed
-              if (meeting.isCompleted)
-                PopupMenuButton<String>(
-                  icon: const Icon(Icons.download),
-                  tooltip: 'Export',
-                  onSelected: (value) => _handleExport(value, meeting),
-                  itemBuilder: (_) => const [
-                    PopupMenuItem(
-                      value: 'pdf',
-                      child: Row(children: [
-                        Icon(Icons.picture_as_pdf),
-                        SizedBox(width: 8),
-                        Text('Export as PDF'),
-                      ]),
-                    ),
-                    PopupMenuItem(
-                      value: 'txt',
-                      child: Row(children: [
-                        Icon(Icons.text_snippet),
-                        SizedBox(width: 8),
-                        Text('Export as TXT'),
-                      ]),
-                    ),
-                    PopupMenuItem(
-                      value: 'email',
-                      child: Row(children: [
-                        Icon(Icons.email),
-                        SizedBox(width: 8),
-                        Text('Send via Email'),
-                      ]),
-                    ),
-                  ],
-                ),
-              // Delete
-              IconButton(
-                icon: const Icon(Icons.delete_outline, color: Color(0xFFEF4444)),
-                tooltip: 'Delete',
-                onPressed: () => _confirmDelete(context),
-              ),
-            ],
-            bottom: TabBar(
-              controller: _tabController,
-              tabs: const [
-                Tab(icon: Icon(Icons.transcribe), text: 'Transcript'),
-                Tab(icon: Icon(Icons.summarize), text: 'Summary'),
-                Tab(icon: Icon(Icons.task), text: 'Actions'),
+                const SizedBox(width: 6),
+                const Icon(Icons.edit_outlined,
+                    size: 15, color: Color(0xFF94A3B8)),
               ],
             ),
           ),
-          body: Column(
-            children: [
-              if (meeting.isProcessing)
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  color: const Color(0xFF2563EB).withOpacity(0.1),
-                  child: const Row(
-                    children: [
-                      SizedBox(
-                        width: 16, height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      ),
-                      SizedBox(width: 12),
-                      Text('Processing your meeting... Results will appear here shortly.'),
-                    ],
-                  ),
-                ),
-              if (meeting.isFailed)
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  color: const Color(0xFFEF4444).withOpacity(0.1),
-                  child: const Row(
-                    children: [
-                      Icon(Icons.error_outline, color: Color(0xFFEF4444), size: 18),
-                      SizedBox(width: 12),
-                      Text('Processing failed. Please try again.',
-                          style: TextStyle(color: Color(0xFFEF4444))),
-                    ],
-                  ),
-                ),
-              Expanded(
-                child: TabBarView(
-                  controller: _tabController,
-                  children: [
-                    _TranscriptTab(meetingId: widget.meetingId),
-                    _SummaryTab(meetingId: widget.meetingId),
-                    _ActionsTab(meetingId: widget.meetingId),
-                  ],
-                ),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.refresh_rounded, size: 20),
+              onPressed: _refreshAll,
+            ),
+            if (meeting.isCompleted)
+              IconButton(
+                icon: const Icon(Icons.ios_share_rounded, size: 20),
+                onPressed: () => _exportCurrentTab(meeting),
               ),
-            ],
+            if (meeting.isCompleted)
+              PopupMenuButton<String>(
+                icon: const Icon(Icons.download_rounded, size: 20),
+                onSelected: (v) => _handleExport(v, meeting),
+                itemBuilder: (_) => const [
+                  PopupMenuItem(
+                    value: 'pdf',
+                    child: Row(children: [
+                      Icon(Icons.picture_as_pdf_outlined, size: 18),
+                      SizedBox(width: 10),
+                      Text('Export as PDF'),
+                    ]),
+                  ),
+                  PopupMenuItem(
+                    value: 'txt',
+                    child: Row(children: [
+                      Icon(Icons.text_snippet_outlined, size: 18),
+                      SizedBox(width: 10),
+                      Text('Export as TXT'),
+                    ]),
+                  ),
+                  PopupMenuItem(
+                    value: 'email',
+                    child: Row(children: [
+                      Icon(Icons.email_outlined, size: 18),
+                      SizedBox(width: 10),
+                      Text('Send via Email'),
+                    ]),
+                  ),
+                ],
+              ),
+            IconButton(
+              icon: const Icon(Icons.delete_outline_rounded,
+                  size: 20, color: Color(0xFFEF4444)),
+              onPressed: () => _confirmDelete(context),
+            ),
+          ],
+          bottom: PreferredSize(
+            preferredSize: const Size.fromHeight(kToolbarHeight),
+            child: _StyledTabBar(controller: _tabController),
           ),
-        );
-      },
-      loading: () => const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
+        ),
+        body: Column(
+          children: [
+            if (meeting.isProcessing)
+              _StatusBanner(
+                color: const Color(0xFF2563EB),
+                icon: Icons.hourglass_top_rounded,
+                message:
+                    'Processing your meeting — results will appear shortly',
+                showSpinner: true,
+              ),
+            if (meeting.isFailed)
+              _StatusBanner(
+                color: const Color(0xFFEF4444),
+                icon: Icons.error_outline_rounded,
+                message: 'Processing failed. Please try uploading again.',
+              ),
+            Expanded(
+              child: TabBarView(
+                controller: _tabController,
+                children: [
+                  _TranscriptTab(meetingId: widget.meetingId),
+                  _SummaryTab(meetingId: widget.meetingId),
+                  _ActionsTab(meetingId: widget.meetingId),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
-      error: (err, _) => Scaffold(
-        body: Center(child: Text('Error: $err')),
+      loading: () => const Scaffold(
+          body: Center(child: CircularProgressIndicator())),
+      error: (err, _) =>
+          Scaffold(body: Center(child: Text('Error: $err'))),
+    );
+  }
+}
+
+// ─── Styled Tab Bar ───────────────────────────────────────────────────────────
+
+class _StyledTabBar extends StatelessWidget {
+  final TabController controller;
+  const _StyledTabBar({required this.controller});
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      height: 44,
+      decoration: BoxDecoration(
+        color: isDark
+            ? Colors.white.withOpacity(0.06)
+            : const Color(0xFFF1F5F9),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: TabBar(
+        controller: controller,
+        indicator: BoxDecoration(
+          color: isDark ? Colors.white.withOpacity(0.12) : Colors.white,
+          borderRadius: BorderRadius.circular(10),
+          boxShadow: isDark
+              ? null
+              : [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.06),
+                    blurRadius: 4,
+                    offset: const Offset(0, 1),
+                  )
+                ],
+        ),
+        indicatorSize: TabBarIndicatorSize.tab,
+        dividerColor: Colors.transparent,
+        labelColor: isDark ? Colors.white : const Color(0xFF0F172A),
+        unselectedLabelColor: const Color(0xFF94A3B8),
+        labelStyle: const TextStyle(
+            fontSize: 13, fontWeight: FontWeight.w600),
+        unselectedLabelStyle: const TextStyle(
+            fontSize: 13, fontWeight: FontWeight.w400),
+        tabs: const [
+          Tab(text: 'Transcript'),
+          Tab(text: 'Summary'),
+          Tab(text: 'Actions'),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Status Banner ────────────────────────────────────────────────────────────
+
+class _StatusBanner extends StatelessWidget {
+  final Color color;
+  final IconData icon;
+  final String message;
+  final bool showSpinner;
+
+  const _StatusBanner({
+    required this.color,
+    required this.icon,
+    required this.message,
+    this.showSpinner = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding:
+          const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      color: color.withOpacity(0.08),
+      child: Row(
+        children: [
+          if (showSpinner)
+            SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(
+                  strokeWidth: 2, color: color),
+            )
+          else
+            Icon(icon, color: color, size: 18),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(message,
+                style: TextStyle(fontSize: 13, color: color)),
+          ),
+        ],
       ),
     );
   }
@@ -377,39 +429,52 @@ class _TranscriptTab extends ConsumerWidget {
     return transcriptAsync.when(
       data: (transcript) {
         if (transcript.segments.isEmpty) {
-          return const Center(child: Text('No transcript available yet.'));
+          return const _TabEmpty(
+              icon: Icons.transcribe_outlined,
+              message: 'No transcript available yet.');
         }
         return ListView.builder(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(20),
           itemCount: transcript.segments.length,
           itemBuilder: (_, i) {
             final seg = transcript.segments[i];
-            final colorIndex = (seg.speaker ?? 'Speaker 0').hashCode.abs() % Colors.primaries.length;
+            final colorIndex =
+                (seg.speaker ?? 'Speaker 0').hashCode.abs() %
+                    Colors.primaries.length;
             return Padding(
-              padding: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.only(bottom: 16),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   SizedBox(
-                    width: 48,
+                    width: 44,
                     child: Text(
                       _formatTime(seg.startTime),
-                      style: const TextStyle(fontSize: 12, color: Colors.grey),
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: Color(0xFF94A3B8),
+                      ),
                     ),
                   ),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        if (seg.speaker != null)
+                        if (seg.speaker != null) ...[
                           Text(
                             seg.speaker!,
                             style: TextStyle(
-                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
                               color: Colors.primaries[colorIndex],
+                              letterSpacing: 0.3,
                             ),
                           ),
-                        Text(seg.text),
+                          const SizedBox(height: 2),
+                        ],
+                        Text(seg.text,
+                            style: const TextStyle(
+                                fontSize: 14, height: 1.5)),
                       ],
                     ),
                   ),
@@ -419,13 +484,12 @@ class _TranscriptTab extends ConsumerWidget {
           },
         );
       },
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (err, _) => Center(
-        child: Text(
-          'Transcript not available yet.\nCheck back after processing completes.',
-          textAlign: TextAlign.center,
-          style: TextStyle(color: Colors.grey[500]),
-        ),
+      loading: () =>
+          const Center(child: CircularProgressIndicator()),
+      error: (_, __) => const _TabEmpty(
+        icon: Icons.transcribe_outlined,
+        message:
+            'Transcript not available yet.\nCheck back after processing completes.',
       ),
     );
   }
@@ -440,44 +504,83 @@ class _SummaryTab extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final intelAsync = ref.watch(intelligenceProvider(meetingId));
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return intelAsync.when(
       data: (intel) => SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Meeting Minutes', style: Theme.of(context).textTheme.headlineSmall),
+            const _SectionLabel(label: 'MEETING MINUTES'),
             const SizedBox(height: 12),
-            Text(intel.summary ?? 'No summary generated yet.'),
-            const SizedBox(height: 24),
-            Text('Key Insights', style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 8),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: isDark
+                    ? Colors.white.withOpacity(0.04)
+                    : const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: isDark
+                      ? Colors.white.withOpacity(0.08)
+                      : const Color(0xFFE2E8F0),
+                ),
+              ),
+              child: Text(
+                intel.summary ?? 'No summary generated yet.',
+                style:
+                    const TextStyle(fontSize: 14, height: 1.6),
+              ),
+            ),
+            const SizedBox(height: 28),
+            const _SectionLabel(label: 'KEY INSIGHTS'),
+            const SizedBox(height: 12),
             if (intel.keyInsights.isEmpty)
-              Text('No insights extracted.', style: TextStyle(color: Colors.grey[500]))
+              const Text('No insights extracted yet.',
+                  style: TextStyle(color: Color(0xFF94A3B8)))
             else
               ...intel.keyInsights.map(
                 (insight) => Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.only(bottom: 10),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Icon(Icons.lightbulb_outline, size: 20, color: Color(0xFFF59E0B)),
-                      const SizedBox(width: 8),
-                      Expanded(child: Text(insight)),
+                      Container(
+                        width: 24,
+                        height: 24,
+                        margin: const EdgeInsets.only(
+                            top: 1, right: 12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF59E0B)
+                              .withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: const Icon(
+                            Icons.lightbulb_outline_rounded,
+                            size: 14,
+                            color: Color(0xFFF59E0B)),
+                      ),
+                      Expanded(
+                        child: Text(insight,
+                            style: const TextStyle(
+                                fontSize: 14, height: 1.5)),
+                      ),
                     ],
                   ),
                 ),
               ),
+            const SizedBox(height: 24),
           ],
         ),
       ),
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (err, _) => Center(
-        child: Text(
-          'Summary not available yet.\nCheck back after processing completes.',
-          textAlign: TextAlign.center,
-          style: TextStyle(color: Colors.grey[500]),
-        ),
+      loading: () =>
+          const Center(child: CircularProgressIndicator()),
+      error: (_, __) => const _TabEmpty(
+        icon: Icons.summarize_outlined,
+        message:
+            'Summary not available yet.\nCheck back after processing completes.',
       ),
     );
   }
@@ -492,35 +595,117 @@ class _ActionsTab extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final intelAsync = ref.watch(intelligenceProvider(meetingId));
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return intelAsync.when(
-      data: (intel) => ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          Text('Action Points', style: Theme.of(context).textTheme.headlineSmall),
-          const SizedBox(height: 12),
-          if (intel.actionPoints.isEmpty)
-            Text('No action points extracted.', style: TextStyle(color: Colors.grey[500]))
-          else
-            ...intel.actionPoints.map(
-              (action) => Card(
-                margin: const EdgeInsets.only(bottom: 8),
-                child: CheckboxListTile(
-                  value: false,
-                  onChanged: (_) {},
-                  title: Text(action),
-                  controlAffinity: ListTileControlAffinity.leading,
+      data: (intel) => SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const _SectionLabel(label: 'ACTION POINTS'),
+            const SizedBox(height: 12),
+            if (intel.actionPoints.isEmpty)
+              const Text('No action points extracted yet.',
+                  style: TextStyle(color: Color(0xFF94A3B8)))
+            else
+              ...intel.actionPoints.map(
+                (action) => Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 14, vertical: 14),
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? Colors.white.withOpacity(0.04)
+                        : Colors.white,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: isDark
+                          ? Colors.white.withOpacity(0.08)
+                          : const Color(0xFFE2E8F0),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 22,
+                        height: 22,
+                        margin: const EdgeInsets.only(right: 12),
+                        decoration: BoxDecoration(
+                          border: Border.all(
+                            color: const Color(0xFF2563EB)
+                                .withOpacity(0.4),
+                          ),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                      ),
+                      Expanded(
+                        child: Text(action,
+                            style: const TextStyle(
+                                fontSize: 14, height: 1.4)),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
-        ],
-      ),
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (err, _) => Center(
-        child: Text(
-          'Actions not available yet.\nCheck back after processing completes.',
-          textAlign: TextAlign.center,
-          style: TextStyle(color: Colors.grey[500]),
+            const SizedBox(height: 24),
+          ],
         ),
+      ),
+      loading: () =>
+          const Center(child: CircularProgressIndicator()),
+      error: (_, __) => const _TabEmpty(
+        icon: Icons.task_outlined,
+        message:
+            'Actions not available yet.\nCheck back after processing completes.',
+      ),
+    );
+  }
+}
+
+// ─── Shared helpers ───────────────────────────────────────────────────────────
+
+class _TabEmpty extends StatelessWidget {
+  final IconData icon;
+  final String message;
+  const _TabEmpty({required this.icon, required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 40, color: const Color(0xFF94A3B8)),
+            const SizedBox(height: 12),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                  color: Color(0xFF94A3B8), fontSize: 14, height: 1.5),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SectionLabel extends StatelessWidget {
+  final String label;
+  const _SectionLabel({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      label,
+      style: const TextStyle(
+        fontSize: 11,
+        fontWeight: FontWeight.w700,
+        letterSpacing: 1.0,
+        color: Color(0xFF94A3B8),
       ),
     );
   }

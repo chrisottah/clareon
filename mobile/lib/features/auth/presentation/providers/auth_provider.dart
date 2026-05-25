@@ -114,9 +114,16 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   void reset() => state = const AuthState();
 
-  String _parseError(Object e) {
+    String _parseError(Object e) {
     if (e is DioException) {
-      return e.response?.data?['detail'] ?? 'Network error';
+      final data = e.response?.data;
+      if (data is Map && data.containsKey('detail')) {
+        return data['detail'].toString();
+      }
+      if (data is String) {
+        return data;
+      }
+      return e.message ?? 'Network error';
     }
     return e.toString();
   }
