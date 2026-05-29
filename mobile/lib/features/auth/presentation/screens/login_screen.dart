@@ -42,12 +42,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
   }
 
   Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) return;
-    final success = await ref
-        .read(authProvider.notifier)
-        .login(_emailCtrl.text.trim(), _passwordCtrl.text);
-    if (success && mounted) context.go('/home');
-  }
+  if (!_formKey.currentState!.validate()) return;
+  
+  // Clear any previous error first
+  ref.read(authProvider.notifier).clearError();
+  
+  final success = await ref
+      .read(authProvider.notifier)
+      .login(_emailCtrl.text.trim(), _passwordCtrl.text);
+  if (success && mounted) context.go('/home');
+}
 
   @override
   Widget build(BuildContext context) {
@@ -159,7 +163,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                           Text("Don't have an account?",
                               style: theme.textTheme.bodyMedium),
                           TextButton(
-                            onPressed: () => context.push('/signup'),
+                            onPressed: () {
+                              ref.read(authProvider.notifier).clearError(); 
+                              context.push('/signup');
+                            },
                             child: const Text('Sign up'),
                           ),
                         ],

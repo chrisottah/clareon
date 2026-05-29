@@ -114,6 +114,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   void reset() => state = const AuthState();
 
+  void clearError() {
+    state = state.copyWith(errorMessage: null);
+  }
+
     String _parseError(Object e) {
     if (e is DioException) {
       final data = e.response?.data;

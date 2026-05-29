@@ -17,9 +17,9 @@ class User(Base):
 
     # KingsChat OAuth
     kingschat_id: Mapped[str | None] = mapped_column(String(255), unique=True, nullable=True, index=True)
-    kingschat_access_token: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    kingschat_access_token: Mapped[str | None] = mapped_column(String(2048), nullable=True)
     kingschat_refresh_token: Mapped[str | None] = mapped_column(String(512), nullable=True)
-    avatar_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    avatar_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
 
     # Email verification — 6-digit OTP
     is_verified: Mapped[bool] = mapped_column(Boolean, default=False)
