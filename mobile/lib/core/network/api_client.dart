@@ -16,6 +16,8 @@ class ApiClient {
         connectTimeout: const Duration(seconds: 30),
         receiveTimeout: const Duration(seconds: 60),
         headers: {'Content-Type': 'application/json'},
+        followRedirects: false,
+        validateStatus: (status) => status! < 400,
       ),
     );
 

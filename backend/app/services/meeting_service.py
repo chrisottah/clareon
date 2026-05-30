@@ -5,9 +5,9 @@ from datetime import datetime, timezone
 from fastapi import UploadFile, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-
 from app.models.meeting import Meeting, MeetingStatus
 from app.core.config import settings
+from app.services.storage_service import upload_audio
 
 
 async def create_meeting_from_upload(
@@ -18,9 +18,6 @@ async def create_meeting_from_upload(
     duration_seconds: int | None,
     recorded_at: datetime | None,
 ) -> Meeting:
-    """Save uploaded audio file and create meeting record."""
-
-    # Validate file type
     allowed_types = {"audio/m4a", "audio/mp4", "audio/mpeg", "audio/wav",
                      "audio/aac", "audio/x-m4a", "application/octet-stream"}
     content_type = audio_file.content_type or "application/octet-stream"
@@ -30,28 +27,30 @@ async def create_meeting_from_upload(
             detail=f"Unsupported audio format: {content_type}",
         )
 
-    # Build storage path: media/{user_id}/{meeting_id}.m4a
     meeting_id = str(uuid.uuid4())
-    user_dir = os.path.join(settings.MEDIA_DIR, user_id)
-    os.makedirs(user_dir, exist_ok=True)
-
     filename = f"{meeting_id}.m4a"
-    file_path = os.path.join(user_dir, filename)
 
-    # Stream file to disk
+    # Save temporarily to disk first
+    tmp_path = f"/tmp/{filename}"
     file_size = 0
-    async with aiofiles.open(file_path, "wb") as f:
-        while chunk := await audio_file.read(1024 * 1024):  # 1MB chunks
+    async with aiofiles.open(tmp_path, "wb") as f:
+        while chunk := await audio_file.read(1024 * 1024):
             await f.write(chunk)
             file_size += len(chunk)
 
-    # Validate file isn't empty
     if file_size == 0:
-        os.remove(file_path)
+        os.remove(tmp_path)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Uploaded file is empty",
         )
+
+    # Upload to R2
+    r2_key = f"{user_id}/{filename}"
+    upload_audio(tmp_path, r2_key)
+
+    # Clean up temp file
+    os.remove(tmp_path)
 
     meeting = Meeting(
         id=meeting_id,

@@ -78,39 +78,49 @@ def process_meeting_task(self, meeting_id: str):
         logger.info(f"Processing meeting: {meeting_id}")
         _set_status_sync(meeting_id, MeetingStatus.processing)
 
-        # Get meeting
         meeting = _get_meeting_sync(meeting_id)
         if not meeting:
             raise ValueError(f"Meeting {meeting_id} not found")
 
-        audio_path = os.path.join(
-            settings.MEDIA_DIR, meeting.user_id, meeting.audio_filename
-        )
+        # Download audio from R2 to temp location
+        from app.services.storage_service import download_audio, delete_audio
+        r2_key = f"{meeting.user_id}/{meeting.audio_filename}"
+        tmp_path = f"/tmp/{meeting.audio_filename}"
+        download_audio(r2_key, tmp_path)
 
-        # Step 1 – Transcribe
-        from app.services.transcription_service import transcribe_audio
-        logger.info("Step 1: Transcribing audio...")
-        segments = transcribe_audio(audio_path)
+        try:
+            # Step 1 — Transcribe
+            from app.services.transcription_service import transcribe_audio
+            logger.info("Step 1: Transcribing audio...")
+            segments = transcribe_audio(tmp_path)
 
-        # Step 2 – Diarize
-        from app.services.diarization_service import diarize_audio, assign_speakers
-        logger.info("Step 2: Running speaker diarization...")
-        speaker_segments = diarize_audio(audio_path)
-        segments = assign_speakers(segments, speaker_segments)
+            # Step 2 — Diarize
+            from app.services.diarization_service import diarize_audio, assign_speakers
+            logger.info("Step 2: Running speaker diarization...")
+            speaker_segments = diarize_audio(tmp_path)
+            segments = assign_speakers(segments, speaker_segments)
 
-        # Step 3 – Save transcript
-        logger.info("Step 3: Saving transcript...")
-        _save_segments_sync(meeting_id, segments)
+            # Step 3 — Save transcript
+            logger.info("Step 3: Saving transcript...")
+            _save_segments_sync(meeting_id, segments)
 
-        # Step 4 – Generate AI intelligence
-        from app.services.intelligence_service import generate_meeting_intelligence
-        logger.info("Step 4: Generating AI intelligence...")
-        saved_segments = _get_segments_sync(meeting_id)
-        intel = generate_meeting_intelligence(saved_segments)
-        _save_intelligence_sync(meeting_id, intel)
+            # Step 4 — Generate AI intelligence
+            from app.services.intelligence_service import generate_meeting_intelligence
+            logger.info("Step 4: Generating AI intelligence...")
+            saved_segments = _get_segments_sync(meeting_id)
+            intel = generate_meeting_intelligence(saved_segments)
+            _save_intelligence_sync(meeting_id, intel)
 
-        _set_status_sync(meeting_id, MeetingStatus.completed)
-        logger.info(f"Meeting {meeting_id} fully processed")
+            _set_status_sync(meeting_id, MeetingStatus.completed)
+            logger.info(f"Meeting {meeting_id} fully processed")
+
+        finally:
+            # Always clean up temp file
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+            # Delete from R2 after processing
+            delete_audio(r2_key)
+
         return {"status": "completed", "meeting_id": meeting_id}
 
     except Exception as e:

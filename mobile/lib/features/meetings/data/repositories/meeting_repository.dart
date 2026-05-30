@@ -58,7 +58,7 @@ class MeetingRepository {
   final _dio = ApiClient.dio;
 
   Future<List<Meeting>> getMeetings() async {
-    final response = await _dio.get('/meetings');
+    final response = await _dio.get('/meetings/');
     final List<dynamic> data =
         response.data is List ? response.data : (response.data['meetings'] ?? []);
     return data.map((json) => Meeting.fromJson(json)).toList();

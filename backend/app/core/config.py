@@ -24,6 +24,12 @@ class Settings(BaseSettings):
     EMAILS_FROM_NAME: str = "Clareon"
     EMAILS_FROM_EMAIL: str = "noreply@clareon.app"
 
+    # Cloudflare R2
+    R2_ACCESS_KEY_ID: str = ""
+    R2_SECRET_ACCESS_KEY: str = ""
+    R2_ACCOUNT_ID: str = ""
+    R2_BUCKET_NAME: str = "clareon-audio"
+
     # Storage
     MEDIA_DIR: str = "/app/media"
 
