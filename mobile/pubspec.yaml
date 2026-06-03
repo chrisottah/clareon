@@ -1,7 +1,7 @@
 name: clareon
 description: AI-powered meeting intelligence app
 publish_to: none
-version: 1.0.0+1
+version: 1.0.0+2
 
 environment:
   sdk: ">=3.3.0 <4.0.0"
@@ -38,7 +38,7 @@ dependencies:
   share_plus: ^9.0.0
   path_provider: ^2.1.4
   pdf: ^3.10.8
-  printing: ^5.12.0
+  printing: ^5.13.1
   url_launcher: ^6.2.6
 
   # UI
