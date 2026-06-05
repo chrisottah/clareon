@@ -35,7 +35,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
   AuthNotifier(this._repo) : super(const AuthState());
 
   Future<bool> login(String email, String password) async {
-    state = state.copyWith(status: AuthStatus.loading);
+    state = state.copyWith(status: AuthStatus.loading, errorMessage: null);
     try {
       await _repo.login(email: email, password: password);
       state = state.copyWith(status: AuthStatus.success);
@@ -47,7 +47,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   Future<bool> signup(String email, String fullName, String password) async {
-    state = state.copyWith(status: AuthStatus.loading);
+    state = state.copyWith(status: AuthStatus.loading, errorMessage: null);
     try {
       await _repo.signup(email: email, fullName: fullName, password: password);
       state = state.copyWith(status: AuthStatus.success, successMessage: 'Account created! Check your email for the 6-digit code.');
@@ -59,7 +59,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   Future<bool> verifyEmail(String email, String otp) async {
-    state = state.copyWith(status: AuthStatus.loading);
+    state = state.copyWith(status: AuthStatus.loading, errorMessage: null);
     try {
       await _repo.verifyEmail(email: email, otp: otp);
       state = state.copyWith(status: AuthStatus.success, successMessage: 'Email verified! You can now log in.');
@@ -77,7 +77,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   Future<bool> forgotPassword(String email) async {
-    state = state.copyWith(status: AuthStatus.loading);
+    state = state.copyWith(status: AuthStatus.loading, errorMessage: null);
     try {
       await _repo.forgotPassword(email);
       state = state.copyWith(status: AuthStatus.success, successMessage: 'Reset code sent to your email.');
@@ -89,7 +89,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   Future<bool> resetPassword(String email, String otp, String newPassword) async {
-    state = state.copyWith(status: AuthStatus.loading);
+    state = state.copyWith(status: AuthStatus.loading, errorMessage: null);
     try {
       await _repo.resetPassword(email: email, otp: otp, newPassword: newPassword);
       state = state.copyWith(status: AuthStatus.success, successMessage: 'Password reset successfully.');
@@ -101,7 +101,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   Future<bool> loginWithKingsChat(String accessToken, String? refreshToken) async {
-    state = state.copyWith(status: AuthStatus.loading);
+    state = state.copyWith(status: AuthStatus.loading, errorMessage: null);
     try {
       await _repo.loginWithKingsChat(accessToken: accessToken, refreshToken: refreshToken);
       state = state.copyWith(status: AuthStatus.success);
@@ -118,18 +118,32 @@ class AuthNotifier extends StateNotifier<AuthState> {
     state = state.copyWith(errorMessage: null);
   }
 
-    String _parseError(Object e) {
+  String _parseError(Object e) {
     if (e is DioException) {
+      // Connection errors
+      if (e.type == DioExceptionType.connectionTimeout ||
+          e.type == DioExceptionType.receiveTimeout) {
+        return 'Connection timed out. Please check your internet and try again.';
+      }
+      if (e.type == DioExceptionType.connectionError) {
+        return 'Could not connect to server. Please check your internet connection.';
+      }
+      // Server errors — pass through the message
       final data = e.response?.data;
       if (data is Map && data.containsKey('detail')) {
         return data['detail'].toString();
       }
-      if (data is String) {
+      if (data is String && data.isNotEmpty) {
         return data;
       }
-      return e.message ?? 'Network error';
+      if (e.response?.statusCode == 500) {
+        return 'Server error. Please try again later.';
+      }
+      if (e.response?.statusCode == 404) {
+        return 'Service not found. Please try again later.';
+      }
     }
-    return e.toString();
+    return 'Something went wrong. Please try again.';
   }
 }
 
