@@ -1,4 +1,6 @@
+import 'dart:io';
 import 'package:dio/dio.dart';
+import 'package:dio/io.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../config/app_config.dart';
 
@@ -16,9 +18,18 @@ class ApiClient {
         connectTimeout: const Duration(seconds: 30),
         receiveTimeout: const Duration(seconds: 60),
         headers: {'Content-Type': 'application/json'},
-        followRedirects: false,
-        validateStatus: (status) => status! < 400,
+        followRedirects: true,                    // FIXED: allow redirects
+        validateStatus: (status) => true,          // FIXED: accept all status codes
       ),
+    );
+
+    // Force fresh DNS resolution on every request
+    d.httpClientAdapter = IOHttpClientAdapter(
+      createHttpClient: () {
+        final client = HttpClient();
+        client.autoUncompress = true;
+        return client;
+      },
     );
 
     d.interceptors.add(
