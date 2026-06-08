@@ -18,12 +18,10 @@ class ApiClient {
         connectTimeout: const Duration(seconds: 30),
         receiveTimeout: const Duration(seconds: 60),
         headers: {'Content-Type': 'application/json'},
-        followRedirects: true,                    // FIXED: allow redirects
-        validateStatus: (status) => true,          // FIXED: accept all status codes
       ),
     );
 
-    // Force fresh DNS resolution on every request
+    // Force fresh DNS for every request
     d.httpClientAdapter = IOHttpClientAdapter(
       createHttpClient: () {
         final client = HttpClient();
@@ -79,7 +77,6 @@ class ApiClient {
       );
       return true;
     } catch (_) {
-      await _storage.deleteAll();
       return false;
     }
   }
