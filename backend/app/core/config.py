@@ -16,26 +16,17 @@ class Settings(BaseSettings):
     # Redis
     REDIS_URL: str = "redis://redis:6379/0"
 
-    # Email
-    SMTP_HOST: str = "smtp.gmail.com"
+    # Email - Brevo API
+    BREVO_API_KEY: str = ""
+    SMTP_HOST: str = "smtp-relay.brevo.com"
     SMTP_PORT: int = 587
     SMTP_USER: str = ""
     SMTP_PASSWORD: str = ""
     EMAILS_FROM_NAME: str = "Clareon"
-    EMAILS_FROM_EMAIL: str = "noreply@clareon.app"
-
-    # Cloudflare R2
-    R2_ACCESS_KEY_ID: str = ""
-    R2_SECRET_ACCESS_KEY: str = ""
-    R2_ACCOUNT_ID: str = ""
-    R2_BUCKET_NAME: str = "clareon-audio"
+    EMAILS_FROM_EMAIL: str = "noreply@clareon.online"
 
     # Storage
     MEDIA_DIR: str = "/app/media"
-
-    # Whisper
-    WHISPER_MODEL: str = "base"
-    WHISPER_DEVICE: str = "cpu"
 
     # Groq
     GROQ_API_KEY: str = ""
