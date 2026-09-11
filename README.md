@@ -113,13 +113,13 @@ clareon/
 ## Phase Checklist
 
 - [x] Phase 1 — Foundation
-- [ ] Phase 2 — Authentication
-- [ ] Phase 3 — Recording
-- [ ] Phase 4 — Meeting Management
-- [ ] Phase 5 — Background Processing
-- [ ] Phase 6 — Transcription
-- [ ] Phase 7 — Speaker Intelligence
-- [ ] Phase 8 — AI Meeting Intelligence
-- [ ] Phase 9 — Results UI
-- [ ] Phase 10 — Export & Sharing
+- [x] Phase 2 — Authentication
+- [x] Phase 3 — Recording
+- [x] Phase 4 — Meeting Management
+- [x] Phase 5 — Background Processing
+- [x] Phase 6 — Transcription
+- [x] Phase 7 — Speaker Intelligence
+- [x] Phase 8 — AI Meeting Intelligence
+- [x] Phase 9 — Results UI
+- [x] Phase 10 — Export & Sharing
 - [ ] Phase 11 — Notifications & Polish
